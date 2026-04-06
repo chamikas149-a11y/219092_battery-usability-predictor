@@ -397,7 +397,7 @@ def generate_report(voltage, current, power, temperature, soh,
         <div class="param-item">
             <div class="param-label">🔌 Current</div>
             <div class="param-value">{current:.3f} A</div>
-            <div class="param-status">{"🔋 Discharging mode" if current>=0 else "⚡ Discharging mode"}</div>
+            <div class="param-status">{"🔋 Charging mode" if current>=0 else "⚡ Discharging mode"}</div>
         </div>
         <div class="param-item">
             <div class="param-label">💡 Power</div>
@@ -567,7 +567,7 @@ with tab1:
                                    value=1.20,step=0.01,format="%.2f",
                                    label_visibility="collapsed")
         curr_color = "#00ff9d" if current>=0 else "#ff6b35"
-        curr_label = "🔋 CHARGING" if current>=0 else "⚡ DISCHARGING"
+        curr_label = "🔋 DISCHARGING" if current>=0 else "⚡ DISCHARGING"
         st.markdown(f"""
         <div style='text-align:center;font-family:Share Tech Mono;font-size:0.78rem;
                     color:{curr_color};margin-top:8px;
