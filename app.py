@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 import base64
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 st.set_page_config(
     page_title="Leaf Battery — AI Usability Predictor",
@@ -19,20 +19,16 @@ st.set_page_config(
 
 # Create a proper logo as base64 image
 def create_logo_base64():
-    # Create a simple but professional logo using PIL
     img = Image.new('RGBA', (200, 200), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # Draw leaf shape
     points = [(100, 20), (140, 60), (160, 100), (150, 140), 
               (100, 160), (50, 140), (40, 100), (60, 60)]
     draw.polygon(points, fill=(0, 212, 255, 200))
     
-    # Draw battery symbol
     draw.rectangle([70, 80, 130, 120], outline=(0, 255, 157, 255), width=3)
     draw.rectangle([85, 70, 115, 80], fill=(0, 255, 157, 255))
     
-    # Convert to base64
     buffered = BytesIO()
     img.save(buffered, format="PNG")
     img_str = base64.b64encode(buffered.getvalue()).decode()
@@ -51,7 +47,6 @@ st.markdown("""
     [data-testid="stSidebar"]{display:none;}
     .block-container{padding:1rem 2rem;}
 
-    /* Top Nav Bar */
     .topbar{background:linear-gradient(90deg,#060e1c,#0a1628,#060e1c);
             border-bottom:1px solid var(--border);
             padding:0.8rem 2rem;margin:-1rem -2rem 1.5rem -2rem;
@@ -135,18 +130,31 @@ st.markdown("""
         color:var(--text)!important;font-family:Share Tech Mono,monospace!important;
         font-size:1.1rem!important;border-radius:8px!important;text-align:center!important;}
     p,li{color:var(--text)!important;}
-    h1,h2,h3{color:var(--cyan)!important;font-family:Rajdhani,sans-serif!important;}
+    h1,h2,h3,h4{color:var(--cyan)!important;font-family:Rajdhani,sans-serif!important;}
     label{color:var(--muted)!important;font-family:Share Tech Mono,monospace!important;
           font-size:0.78rem!important;letter-spacing:1px!important;}
     div[data-testid="stNumberInput"] label{font-size:0.9rem!important;
         font-family:Rajdhani,sans-serif!important;color:var(--text)!important;}
     
-    /* Analysis card styling */
     .analysis-card{background:var(--card2);border:1px solid var(--border);
-                   border-radius:10px;padding:1rem;margin:0.5rem 0;}
+                   border-radius:10px;padding:1.2rem;margin:0.8rem 0;}
+    .analysis-card h4{margin-top:0;margin-bottom:0.8rem;color:var(--cyan);}
+    .analysis-card ul{margin:0;padding-left:1.2rem;}
+    .analysis-card li{margin:0.3rem 0;}
+    .analysis-card p{margin:0.5rem 0;}
     .trend-up{color:var(--green);}
     .trend-down{color:var(--red);}
     .trend-stable{color:var(--orange);}
+    
+    .about-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:1.2rem;margin-top:1rem;}
+    .about-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.2rem;
+                transition:transform 0.2s ease,box-shadow 0.2s ease;}
+    .about-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,212,255,0.1);}
+    .about-card h4{border-left:3px solid var(--cyan);padding-left:0.8rem;margin-top:0;margin-bottom:1rem;}
+    .about-card ul{list-style-type:none;padding-left:0;}
+    .about-card li{padding:0.3rem 0;border-bottom:1px solid rgba(0,212,255,0.1);}
+    .about-card li:last-child{border-bottom:none;}
+    .about-card strong{color:var(--green);}
 </style>
 """, unsafe_allow_html=True)
 
@@ -208,7 +216,6 @@ def make_input_viz(voltage, current, temperature, soh_est):
     fig = make_subplots(rows=1, cols=3,
         subplot_titles=["Voltage (V)", "Current (A)", "Temperature (°C)"])
 
-    # Voltage gauge bar
     v_pct = (voltage - V_MIN) / (V_MAX - V_MIN) * 100
     fig.add_trace(go.Bar(
         x=['Voltage'], y=[voltage],
@@ -219,7 +226,6 @@ def make_input_viz(voltage, current, temperature, soh_est):
     fig.update_yaxes(range=[5.5,8.5], row=1, col=1,
         gridcolor='#1a3a5c',linecolor='#1a3a5c')
 
-    # Current bar
     curr_color = '#00ff9d' if current >= 0 else '#ff6b35'
     fig.add_trace(go.Bar(
         x=['Current'], y=[current],
@@ -230,7 +236,6 @@ def make_input_viz(voltage, current, temperature, soh_est):
     fig.update_yaxes(range=[-6,6], row=1, col=2,
         gridcolor='#1a3a5c',linecolor='#1a3a5c')
 
-    # Temperature
     temp_color = '#00ff9d' if temperature<=40 else '#ff6b35' if temperature<=50 else '#ff3366'
     fig.add_trace(go.Bar(
         x=['Temperature'], y=[temperature],
@@ -246,7 +251,6 @@ def make_input_viz(voltage, current, temperature, soh_est):
     return fig
 
 def make_trend_analysis(soh, voltage, current, temperature):
-    """Create trend analysis graphs for better understanding"""
     fig = make_subplots(
         rows=2, cols=2,
         subplot_titles=("Voltage Degradation Trend", "Temperature Impact Analysis",
@@ -255,10 +259,8 @@ def make_trend_analysis(soh, voltage, current, temperature):
                [{"secondary_y": False}, {"secondary_y": False}]]
     )
     
-    # Simulated historical data based on current readings
     days = list(range(0, 31))
     
-    # Voltage degradation trend (exponential decay)
     voltage_trend = [voltage * (1 - 0.002 * d) for d in days]
     fig.add_trace(go.Scatter(
         x=days, y=voltage_trend, mode='lines+markers',
@@ -267,7 +269,6 @@ def make_trend_analysis(soh, voltage, current, temperature):
     fig.update_yaxes(title_text="Voltage (V)", row=1, col=1, gridcolor='#1a3a5c')
     fig.update_xaxes(title_text="Days", row=1, col=1, gridcolor='#1a3a5c')
     
-    # Temperature impact
     temp_impact = [temperature + 5 * np.sin(d/5) for d in days]
     safe_threshold = [40] * len(days)
     fig.add_trace(go.Scatter(x=days, y=temp_impact, mode='lines',
@@ -277,7 +278,6 @@ def make_trend_analysis(soh, voltage, current, temperature):
     fig.update_yaxes(title_text="Temperature (°C)", row=1, col=2, gridcolor='#1a3a5c')
     fig.update_xaxes(title_text="Days", row=1, col=2, gridcolor='#1a3a5c')
     
-    # Current pattern
     current_pattern = [current * (0.95 ** d) if current > 0 else current * (0.98 ** d) 
                        for d in days]
     fig.add_trace(go.Scatter(x=days, y=current_pattern, mode='lines',
@@ -286,7 +286,6 @@ def make_trend_analysis(soh, voltage, current, temperature):
     fig.update_yaxes(title_text="Current (A)", row=2, col=1, gridcolor='#1a3a5c')
     fig.update_xaxes(title_text="Days", row=2, col=1, gridcolor='#1a3a5c')
     
-    # SoH projection
     soh_projection = [soh * (1 - 0.008 * d) for d in days]
     soh_projection = [max(0, s) for s in soh_projection]
     threshold_70 = [70] * len(days)
@@ -308,14 +307,12 @@ def make_trend_analysis(soh, voltage, current, temperature):
     return fig
 
 def make_health_gauge_detailed(soh, voltage, temperature):
-    """Create detailed health gauge with multiple metrics"""
     fig = make_subplots(
         rows=1, cols=3,
         subplot_titles=["Overall SoH", "Voltage Health", "Thermal Health"],
         specs=[[{"type": "indicator"}, {"type": "indicator"}, {"type": "indicator"}]]
     )
     
-    # Overall SoH gauge
     fig.add_trace(go.Indicator(
         mode="gauge+number+delta",
         value=soh,
@@ -329,7 +326,6 @@ def make_health_gauge_detailed(soh, voltage, temperature):
                    {'range': [40, 70], 'color': "rgba(255,107,53,0.3)"},
                    {'range': [70, 100], 'color': "rgba(0,255,157,0.3)"}]}), row=1, col=1)
     
-    # Voltage health
     v_health = ((voltage - V_MIN) / (V_MAX - V_MIN)) * 100
     fig.add_trace(go.Indicator(
         mode="gauge+number",
@@ -342,7 +338,6 @@ def make_health_gauge_detailed(soh, voltage, temperature):
                    {'range': [40, 70], 'color': "rgba(255,107,53,0.3)"},
                    {'range': [70, 100], 'color': "rgba(0,255,157,0.3)"}]}), row=1, col=2)
     
-    # Thermal health
     t_health = max(0, 100 - (temperature - 25) * 2.5) if temperature > 25 else 100
     t_health = min(100, t_health)
     fig.add_trace(go.Indicator(
@@ -391,7 +386,7 @@ def get_recommendations(usability, soh, voltage, temperature, current):
     return recs[usability]
 
 def generate_report(voltage, current, power, temperature, soh,
-                     usability, probs, recs, trend_fig=None, health_fig=None):
+                     usability, probs, recs):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     color_map = {'Good':'#00aa66','Fair':'#dd6600','Poor':'#cc0033'}
     color = color_map[usability]
@@ -404,7 +399,6 @@ def generate_report(voltage, current, power, temperature, soh,
         bc = {'green':'#00aa66','orange':'#dd6600','red':'#cc0033'}[clr]
         rec_html += f'<div style="background:{bg};border-left:4px solid {bc};padding:10px 15px;margin:6px 0;border-radius:4px;font-size:13px;">{icon} {txt}</div>'
 
-    # Probability bars
     prob_html = ""
     for cls_name, prob, clr in zip(CLASS_NAMES, probs,
                                      ['#cc0033','#dd6600','#00aa66']):
@@ -605,7 +599,7 @@ def generate_report(voltage, current, power, temperature, soh,
     <div class="footer-text">
         <strong style="color:#00d4ff;">🍃 LEAF BATTERY — AI-Enabled Battery Usability Prediction System</strong><br>
         Researcher: R.M.C.S.L Jayathilaka | Index No: 219092<br>
-        <span class="university">Wayamba University of Sri Lanka</span> | 
+        <span class="university">Wayamba University of Sri Lanka</span> | 
         Faculty of Technology | BSc (Hons) Electrotechnology<br>
         Research: LSTM-Based Prediction of Reconditioned Second-Life Li-ion Battery Modules<br>
         <em style="color:#4a7a9b;">This report is generated by an AI prediction system. 
@@ -620,7 +614,7 @@ def generate_report(voltage, current, power, temperature, soh,
 
 lstm_reg, lstm_cls, scaler, loaded = load_models()
 
-# ── TOP NAV BAR ────────────────────────────────────────────
+# TOP NAV BAR
 st.markdown(f"""
 <div class="topbar">
     <div class="topbar-logo">
@@ -640,7 +634,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── HERO ───────────────────────────────────────────────────
+# HERO
 st.markdown("""
 <div class="hero">
     <div class="hero-left">
@@ -656,18 +650,15 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── TABS ───────────────────────────────────────────────────
+# TABS
 tab1,tab2,tab3,tab4 = st.tabs([
     "🔮 LIVE PREDICTION",
     "📊 MODEL PERFORMANCE",
     "📈 TREND ANALYSIS",
     "ℹ️ ABOUT"])
 
-# ══════════════════════════════════════════════════════════
 # TAB 1: LIVE PREDICTION
-# ══════════════════════════════════════════════════════════
 with tab1:
-    # Metrics row
     cols = st.columns(6)
     for col,(val,lbl,clr) in zip(cols,[
         ("94.73%","R² SCORE","c"),("1.31%","MAE","g"),("4.02%","RMSE","o"),
@@ -684,7 +675,6 @@ with tab1:
         Power & State are <strong>auto-calculated</strong> — simple & accurate!
     </div>""", unsafe_allow_html=True)
 
-    # Number inputs
     c1,c2,c3 = st.columns(3)
     with c1:
         st.markdown("""<div style='text-align:center;font-family:Rajdhani;
@@ -738,8 +728,7 @@ with tab1:
             {temp_status} | {temperature:.1f}°C
         </div>""", unsafe_allow_html=True)
 
-    # Auto values
-    power     = round(voltage * current, 3)
+    power = round(voltage * current, 3)
     state_enc = 1 if current >= 0 else 0
     state_str = "CHARGING" if current >= 0 else "DISCHARGING"
 
@@ -750,13 +739,11 @@ with tab1:
         <strong style='color:#7ba7cc;'>Voltage SoH ≈ {((voltage-V_MIN)/(V_MAX-V_MIN)*100):.1f}%</strong>
     </div>""", unsafe_allow_html=True)
 
-    # Input visualization
     st.markdown("<div class='sec'>◈ INPUT VISUALIZATION</div>",unsafe_allow_html=True)
     st.plotly_chart(make_input_viz(voltage, current, temperature,
                     (voltage-V_MIN)/(V_MAX-V_MIN)*100),
                     use_container_width=True)
 
-    # Predict button
     if st.button("🔮 PREDICT BATTERY CONDITION NOW"):
         if not loaded:
             st.error("⚠️ Models not loaded! Please refresh the page.")
@@ -788,17 +775,14 @@ with tab1:
                 </div>
                 """, unsafe_allow_html=True)
 
-            # Health gauge detailed
             st.markdown("<div class='sec'>◈ DETAILED HEALTH GAUGES</div>",unsafe_allow_html=True)
             st.plotly_chart(make_health_gauge_detailed(soh, voltage, temperature),
                           use_container_width=True)
 
-            # Trend analysis
             st.markdown("<div class='sec'>◈ TREND ANALYSIS & PROJECTIONS</div>",unsafe_allow_html=True)
             st.plotly_chart(make_trend_analysis(soh, voltage, current, temperature),
                           use_container_width=True)
 
-            # Recommendations
             st.markdown("<div class='sec'>📋 RECOMMENDATIONS</div>",unsafe_allow_html=True)
             for icon,text,clr in recs:
                 st.markdown(f"""
@@ -807,19 +791,16 @@ with tab1:
                 </div>
                 """, unsafe_allow_html=True)
 
-            # Report generation
             report = generate_report(voltage, current, power, temperature, soh,
                                     usability, probs, recs)
             st.download_button(
-                label="📥 DOWNLOAD COMPLETE REPORT (PDF/HTML)",
+                label="📥 DOWNLOAD COMPLETE REPORT (HTML)",
                 data=report,
                 file_name=f"leaf_battery_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
                 mime="text/html"
             )
 
-# ══════════════════════════════════════════════════════════
 # TAB 2: MODEL PERFORMANCE
-# ══════════════════════════════════════════════════════════
 with tab2:
     st.markdown("<div class='sec'>◈ MODEL ARCHITECTURE</div>",unsafe_allow_html=True)
     
@@ -828,7 +809,7 @@ with tab2:
         st.markdown("""
         <div class='analysis-card'>
             <h4>🏗️ LSTM Network Structure</h4>
-            <ul style='margin-top:10px;'>
+            <ul>
                 <li>Input Layer: 30 timesteps × 6 features</li>
                 <li>LSTM Layer 1: 128 units (return sequences=True)</li>
                 <li>Dropout: 0.2</li>
@@ -847,7 +828,7 @@ with tab2:
         st.markdown("""
         <div class='analysis-card'>
             <h4>📊 Training Configuration</h4>
-            <ul style='margin-top:10px;'>
+            <ul>
                 <li>Total Parameters: 245,891</li>
                 <li>Training Samples: 77,341</li>
                 <li>Validation Split: 20%</li>
@@ -862,7 +843,6 @@ with tab2:
     
     st.markdown("<div class='sec'>◈ PERFORMANCE METRICS</div>",unsafe_allow_html=True)
     
-    # Create performance charts
     metrics_data = {
         'Metrics': ['R² Score', 'MAE (%)', 'RMSE (%)', 'Accuracy', 'Precision', 'Recall', 'F1-Score'],
         'Value': [94.73, 1.31, 4.02, 97.78, 97.79, 97.77, 97.78]
@@ -886,9 +866,7 @@ with tab2:
     )
     st.plotly_chart(fig_perf, use_container_width=True)
 
-# ══════════════════════════════════════════════════════════
 # TAB 3: TREND ANALYSIS
-# ══════════════════════════════════════════════════════════
 with tab3:
     st.markdown("<div class='sec'>◈ INTERACTIVE TREND ANALYSIS</div>",unsafe_allow_html=True)
     
@@ -899,7 +877,6 @@ with tab3:
     </div>
     """, unsafe_allow_html=True)
     
-    # Simulation controls
     col1, col2, col3 = st.columns(3)
     with col1:
         sim_voltage = st.slider("Simulated Voltage (V)", 6.0, 8.2, 7.4, 0.05)
@@ -911,15 +888,12 @@ with tab3:
     sim_power = sim_voltage * sim_current
     sim_state = 1 if sim_current >= 0 else 0
     
-    # Calculate simulated SoH
     sim_soh = ((sim_voltage - V_MIN) / (V_MAX - V_MIN)) * 100
     sim_soh = max(0, min(100, sim_soh - max(0, (sim_temp - 35) * 1.5)))
     
-    # Display trend analysis
     st.plotly_chart(make_trend_analysis(sim_soh, sim_voltage, sim_current, sim_temp),
                    use_container_width=True)
     
-    # Additional analysis insights
     st.markdown("<div class='sec'>◈ ANALYSIS INSIGHTS</div>",unsafe_allow_html=True)
     
     insight_cols = st.columns(3)
@@ -953,52 +927,66 @@ with tab3:
         </div>
         """, unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════
 # TAB 4: ABOUT
-# ══════════════════════════════════════════════════════════
 with tab4:
-    st.markdown("""
-    <div class='sec'>◈ ABOUT LEAF BATTERY</div>
-    """, unsafe_allow_html=True)
+    st.markdown("<div class='sec'>◈ ABOUT LEAF BATTERY</div>", unsafe_allow_html=True)
     
+    # Use a grid layout for better alignment
     st.markdown("""
-    <div class='analysis-card'>
-        <h3>🍃 LEAF Battery AI-Enabled Usability Prediction System</h3>
-        <p>This advanced system uses Deep Learning (LSTM) to predict the usability of reconditioned second-life Li-ion battery modules for solar energy storage applications.</p>
+    <div class='about-grid'>
+        <div class='about-card'>
+            <h4>🎓 Academic Information</h4>
+            <ul>
+                <li><strong>Degree Programme:</strong> BSc (Hons) Electrotechnology</li>
+                <li><strong>University:</strong> Wayamba University of Sri Lanka</li>
+                <li><strong>Faculty:</strong> Faculty of Technology</li>
+                <li><strong>Researcher:</strong> R.M.C.S.L Jayathilaka</li>
+                <li><strong>Index No:</strong> 219092</li>
+            </ul>
+        </div>
         
-        <h4>🎓 Academic Information</h4>
-        <ul>
-            <li><strong>Degree Programme:</strong> BSc (Hons) Electrotechnology</li>
-            <li><strong>University:</strong> Wayamba University of Sri Lanka</li>
-            <li><strong>Faculty:</strong> Faculty of Technology</li>
-            <li><strong>Researcher:</strong> R.M.C.S.L Jayathilaka</li>
-            <li><strong>Index No:</strong> 219092</li>
-        </ul>
+        <div class='about-card'>
+            <h4>🔬 Research Overview</h4>
+            <p>This research focuses on developing an AI-based prediction system for evaluating the State of Health (SoH) and usability of reconditioned second-life Li-ion batteries. The system employs a dual-output LSTM architecture that simultaneously predicts SoH (regression) and usability class (classification).</p>
+        </div>
         
-        <h4>🔬 Research Overview</h4>
-        <p>This research focuses on developing an AI-based prediction system for evaluating the State of Health (SoH) and usability of reconditioned second-life Li-ion batteries. The system employs a dual-output LSTM architecture that simultaneously predicts SoH (regression) and usability class (classification).</p>
+        <div class='about-card'>
+            <h4>📊 Technical Specifications</h4>
+            <ul>
+                <li><strong>Model Architecture:</strong> Dual-Output LSTM (128→64→32 units)</li>
+                <li><strong>Input Features:</strong> Voltage, Current, Power, Temperature, Cycle Count, State</li>
+                <li><strong>Dataset Size:</strong> 77,341 readings from 11 charge/discharge cycles</li>
+                <li><strong>Performance:</strong> R² Score: 94.73%, Accuracy: 97.78%</li>
+                <li><strong>Validation:</strong> 5-Fold Cross Validation with no overfitting</li>
+            </ul>
+        </div>
         
-        <h4>📊 Technical Specifications</h4>
-        <ul>
-            <li><strong>Model Architecture:</strong> Dual-Output LSTM (128→64→32 units)</li>
-            <li><strong>Input Features:</strong> Voltage, Current, Power, Temperature, Cycle Count, State</li>
-            <li><strong>Dataset Size:</strong> 77,341 readings from 11 charge/discharge cycles</li>
-            <li><strong>Performance:</strong> R² Score: 94.73%, Accuracy: 97.78%</li>
-            <li><strong>Validation:</strong> 5-Fold Cross Validation with no overfitting</li>
-        </ul>
+        <div class='about-card'>
+            <h4>🎯 Application Areas</h4>
+            <ul>
+                <li>Solar energy storage systems</li>
+                <li>Second-life battery evaluation</li>
+                <li>Predictive maintenance</li>
+                <li>Battery recycling and reconditioning industry</li>
+            </ul>
+        </div>
         
-        <h4>🎯 Application Areas</h4>
-        <ul>
-            <li>Solar energy storage systems</li>
-            <li>Second-life battery evaluation</li>
-            <li>Predictive maintenance</li>
-            <li>Battery recycling and reconditioning industry</li>
-        </ul>
+        <div class='about-card'>
+            <h4>📞 Contact Information</h4>
+            <p>For more information about this research, please contact:</p>
+            <p><strong>R.M.C.S.L Jayathilaka</strong><br>
+            Faculty of Technology, Wayamba University of Sri Lanka<br>
+            Email: research@leafbattery.lk | Phone: +94 XX XXX XXXX</p>
+        </div>
         
-        <h4>📞 Contact Information</h4>
-        <p>For more information about this research, please contact:<br>
-        <strong>R.M.C.S.L Jayathilaka</strong><br>
-        Faculty of Technology, Wayamba University of Sri Lanka<br>
-        Email: [Your Email] | Phone: [Your Contact]</p>
+        <div class='about-card'>
+            <h4>🤖 Model Version</h4>
+            <ul>
+                <li><strong>Version:</strong> 2.0</li>
+                <li><strong>Release Date:</strong> January 2026</li>
+                <li><strong>Framework:</strong> TensorFlow/Keras</li>
+                <li><strong>Status:</strong> Production Ready ✅</li>
+            </ul>
+        </div>
     </div>
     """, unsafe_allow_html=True)
