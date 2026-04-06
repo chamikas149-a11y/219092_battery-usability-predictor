@@ -844,7 +844,7 @@ with tab4:
         for icon,lbl,val in [
             ("👤","Name","R.M.C.S.L Jayathilaka"),
             ("🔢","Index No","219092"),
-            ("🎓","Degree","BSc (Hons) Information Technology"),
+            ("🎓","Degree","BSc (Hons) Electrotechnology"),
             ("🏫","University","Wayamba University of Sri Lanka"),
             ("🏛️","Faculty","Faculty of Technology"),
             ("📅","Year","Final Year Research Project — 2025/2026")]:
