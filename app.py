@@ -75,8 +75,6 @@ st.markdown("""
 PLOT_BG = dict(
     paper_bgcolor='#0a1628', plot_bgcolor='#050d1a',
     font=dict(color='#7ba7cc', family='Share Tech Mono'),
-    xaxis=dict(gridcolor='#1a3a5c', linecolor='#1a3a5c'),
-    yaxis=dict(gridcolor='#1a3a5c', linecolor='#1a3a5c'),
     legend=dict(bgcolor='#0a1628', bordercolor='#1a3a5c', borderwidth=1))
 
 V_MIN, V_MAX = 6.0, 8.2
