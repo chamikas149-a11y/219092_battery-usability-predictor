@@ -899,7 +899,7 @@ with tab4:
         </div>
         <div style='font-family:Share Tech Mono,monospace;font-size:0.8rem;
                     color:#7ba7cc;margin-top:0.5rem;'>
-            Faculty of Technology | Department of Information Technology
+            Faculty of Technology | Department of Electrotechnology
         </div>
         <div style='font-family:Exo 2,sans-serif;font-size:0.9rem;
                     color:#e8f4fd;margin-top:0.8rem;line-height:1.6;'>
