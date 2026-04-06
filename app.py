@@ -397,7 +397,7 @@ def generate_report(voltage, current, power, temperature, soh,
         <div class="param-item">
             <div class="param-label">🔌 Current</div>
             <div class="param-value">{current:.3f} A</div>
-            <div class="param-status">{"🔋 Charging mode" if current>=0 else "⚡ Discharging mode"}</div>
+            <div class="param-status">{"🔋 Discharging mode" if current>=0 else "⚡ Discharging mode"}</div>
         </div>
         <div class="param-item">
             <div class="param-label">💡 Power</div>
