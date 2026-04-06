@@ -68,8 +68,20 @@ st.markdown("""
     label{color:var(--muted)!important;font-family:Share Tech Mono,monospace!important;
           font-size:0.78rem!important;letter-spacing:1px!important;}
     [data-testid="stSidebar"] *{color:var(--text)!important;}
-    /* Slider value display fix */
-    .stSlider > div > div > div > div > div {color: var(--cyan) !important; font-weight: bold !important;}
+    
+    /* Slider styling - මේකෙන් slide bar එක view වෙයි */
+    .stSlider > div > div > div > div {
+        color: var(--cyan) !important;
+        font-weight: bold !important;
+        font-family: 'Share Tech Mono', monospace !important;
+    }
+    .stSlider > div > div > div {
+        background-color: var(--border) !important;
+    }
+    .stSlider > div > div > div > div[role="slider"] {
+        background-color: var(--cyan) !important;
+        border-color: var(--cyan) !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -205,52 +217,41 @@ elif page == "🔮 Live Prediction":
         c1,c2 = st.columns(2)
         
         with c1:
-            # FIXED: Added format and key to display values properly
             voltage = st.slider(
                 "⚡ VOLTAGE (V)", 
                 min_value=6.0, max_value=8.2, 
                 value=7.4, step=0.01,
-                format="%.2f V",
                 key="voltage_slider"
             )
-            st.markdown(f"<p style='text-align:center;color:#00d4ff;font-family:monospace;'>Current Value: <strong>{voltage:.2f} V</strong></p>", unsafe_allow_html=True)
             
             current = st.slider(
                 "🔌 CURRENT (A)", 
                 min_value=-5.0, max_value=5.0, 
                 value=1.2, step=0.01,
-                format="%.2f A",
                 key="current_slider"
             )
-            st.markdown(f"<p style='text-align:center;color:#00d4ff;font-family:monospace;'>Current Value: <strong>{current:.2f} A</strong></p>", unsafe_allow_html=True)
             
             power = st.slider(
                 "💡 POWER (W)", 
                 min_value=-30.0, max_value=30.0, 
                 value=float(round(7.4*1.2, 2)), step=0.1,
-                format="%.1f W",
                 key="power_slider"
             )
-            st.markdown(f"<p style='text-align:center;color:#00d4ff;font-family:monospace;'>Current Value: <strong>{power:.1f} W</strong></p>", unsafe_allow_html=True)
             
         with c2:
             temperature = st.slider(
                 "🌡️ TEMPERATURE (°C)", 
                 min_value=20.0, max_value=60.0, 
                 value=35.0, step=0.5,
-                format="%.1f °C",
                 key="temp_slider"
             )
-            st.markdown(f"<p style='text-align:center;color:#00d4ff;font-family:monospace;'>Current Value: <strong>{temperature:.1f} °C</strong></p>", unsafe_allow_html=True)
             
             cycle_count = st.slider(
                 "🔄 CYCLE COUNT", 
                 min_value=1, max_value=20, 
                 value=5, step=1,
-                format="%d cycles",
                 key="cycle_slider"
             )
-            st.markdown(f"<p style='text-align:center;color:#00d4ff;font-family:monospace;'>Current Value: <strong>{cycle_count} cycles</strong></p>", unsafe_allow_html=True)
             
             state = st.selectbox("🔋 STATE", ["CHARGING", "DISCHARGING"], key="state_select")
             state_enc = 1 if state == "CHARGING" else 0
