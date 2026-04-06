@@ -90,9 +90,9 @@ def load_models():
     try:
         import tensorflow as tf
         from tensorflow.keras.models import load_model
-        reg    = load_model('models/best_lstm_regression.keras')
-        cls    = load_model('models/best_lstm_classification.keras')
-        with open('models/scaler_X.pkl', 'rb') as f:
+        reg    = load_model('best_lstm_regression.keras')
+        cls    = load_model('best_lstm_classification.keras')
+        with open('scaler_X.pkl', 'rb') as f:
             scaler = pickle.load(f)
         return reg, cls, scaler, True
     except Exception as e:
@@ -490,4 +490,3 @@ elif page == "ℹ️ About":
                 <div style='color:#00d4ff;font-family:Rajdhani,sans-serif;font-weight:600;font-size:0.85rem;'>{name}</div>
                 <div style='color:#7ba7cc;font-family:Share Tech Mono,monospace;font-size:0.68rem;'>{desc}</div>
             </div>""",unsafe_allow_html=True)
-
