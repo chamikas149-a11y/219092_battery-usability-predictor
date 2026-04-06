@@ -86,10 +86,8 @@ CLASS_NAMES = ['Poor','Fair','Good']
 CLASS_COLORS = {'Poor':'#ff3366','Fair':'#ff6b35','Good':'#00ff9d'}
 
 @st.cache_resource
-@st.cache_resource
 def load_models():
     try:
-        # Load models using keras directly
         import keras
         reg    = keras.models.load_model('best_lstm_regression.keras')
         cls    = keras.models.load_model('best_lstm_classification.keras')
@@ -188,9 +186,8 @@ if page == "🏠 Dashboard":
             textfont=dict(size=10,family='Share Tech Mono')))
     fig2.update_layout(**PLOT_BG,barmode='group',height=300,
         yaxis=dict(range=[0,115],gridcolor='#1a3a5c',linecolor='#1a3a5c'),
-        margin=dict(l=5,r=5,t=10,b=5),
-        shapes=[dict(type='line',y0=90,y1=90,x0=-0.5,x1=2.5,
-                     line=dict(color='#ff3366',dash='dash',width=1.5))])
+        margin=dict(l=5,r=5,t=10,b=5))
+    fig2.add_hline(y=90,line_dash='dash',line_color='#ff3366')
     st.plotly_chart(fig2,use_container_width=True)
 
 # ── LIVE PREDICTION ────────────────────────────────────────
