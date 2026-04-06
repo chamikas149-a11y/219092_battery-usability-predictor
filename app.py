@@ -86,6 +86,8 @@ CLASS_COLORS = {'Poor':'#ff3366','Fair':'#ff6b35','Good':'#00ff9d'}
 @st.cache_resource
 def load_models():
     try:
+        import os
+        os.environ['KERAS_BACKEND'] = 'jax'
         import keras
         reg    = keras.models.load_model('best_lstm_regression.keras')
         cls    = keras.models.load_model('best_lstm_classification.keras')
