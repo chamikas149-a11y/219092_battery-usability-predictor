@@ -1,7 +1,4 @@
-# මෙම කොටස Colab එකේ Run කරන්න. එවිට app.py ෆයිල් එක download වේවි.
-from google.colab import files
-
-app_code = '''import streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -19,7 +16,7 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    @import url(\'https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600&display=swap\');
+    @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600&display=swap');
     :root {
         --bg:#050d1a;--card:#0a1628;--card2:#0d1f3c;
         --cyan:#00d4ff;--green:#00ff9d;--orange:#ff6b35;
@@ -65,7 +62,7 @@ st.markdown("""
     .mcard{background:var(--card);border:1px solid var(--border);
            border-radius:10px;padding:1rem;text-align:center;
            position:relative;overflow:hidden;}
-    .mcard::before{content:\'\';position:absolute;top:0;left:0;right:0;height:2px;}
+    .mcard::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
     .mcard.c::before{background:var(--cyan);}.mcard.g::before{background:var(--green);}
     .mcard.o::before{background:var(--orange);}.mcard.r::before{background:var(--red);}
     .mval{font-family:Rajdhani,sans-serif;font-size:1.8rem;font-weight:700;margin:0;}
@@ -96,24 +93,24 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 PLOT_BG = dict(
-    paper_bgcolor=\'#0a1628\', plot_bgcolor=\'#050d1a\',
-    font=dict(color=\'#7ba7cc\', family=\'Share Tech Mono\'),
-    legend=dict(bgcolor=\'#0a1628\', bordercolor=\'#1a3a5c\', borderwidth=1))
+    paper_bgcolor='#0a1628', plot_bgcolor='#050d1a',
+    font=dict(color='#7ba7cc', family='Share Tech Mono'),
+    legend=dict(bgcolor='#0a1628', bordercolor='#1a3a5c', borderwidth=1))
 
 V_MIN, V_MAX = 6.0, 8.2
 SEQUENCE_LENGTH = 30
-FEATURES = [\'Voltage\',\'Current\',\'Power\',\'Temperature\',\'CycleCount\',\'State_encoded\']
-CLASS_NAMES = [\'Poor\',\'Fair\',\'Good\']
-CLASS_COLORS = {\'Poor\':\'#ff3366\',\'Fair\':\'#ff6b35\',\'Good\':\'#00ff9d\'}
+FEATURES = ['Voltage','Current','Power','Temperature','CycleCount','State_encoded']
+CLASS_NAMES = ['Poor','Fair','Good']
+CLASS_COLORS = {'Poor':'#ff3366','Fair':'#ff6b35','Good':'#00ff9d'}
 
 @st.cache_resource
 def load_models():
     try:
-        os.environ[\'KERAS_BACKEND\'] = \'numpy\'
+        os.environ['KERAS_BACKEND'] = 'numpy'
         import keras
-        reg = keras.models.load_model(\'best_lstm_regression.keras\')
-        cls = keras.models.load_model(\'best_lstm_classification.keras\')
-        with open(\'scaler_X.pkl\', \'rb\') as f:
+        reg = keras.models.load_model('best_lstm_regression.keras')
+        cls = keras.models.load_model('best_lstm_classification.keras')
+        with open('scaler_X.pkl', 'rb') as f:
             scaler = pickle.load(f)
         return reg, cls, scaler, True
     except Exception as e:
@@ -132,7 +129,7 @@ def make_prob_chart(probs):
         y=probs * 100,
         marker_color=[CLASS_COLORS[c] for c in CLASS_NAMES],
         text=[f"{p*100:.1f}%" for p in probs],
-        textposition=\'auto\',
+        textposition='auto',
     ))
     fig.update_layout(**PLOT_BG, height=300, title="Confidence Levels (%)", 
                       margin=dict(l=20,r=20,t=40,b=20))
@@ -141,9 +138,9 @@ def make_prob_chart(probs):
 def make_input_viz(voltage, current, temperature):
     fig = make_subplots(rows=1, cols=3,
         subplot_titles=["Voltage (V)", "Current (A)", "Temp (°C)"])
-    fig.add_trace(go.Bar(x=[\'V\'], y=[voltage], marker_color=\'#00d4ff\'), row=1, col=1)
-    fig.add_trace(go.Bar(x=[\'A\'], y=[current], marker_color=\'#00ff9d\'), row=1, col=2)
-    fig.add_trace(go.Bar(x=[\'T\'], y=[temperature], marker_color=\'#ff6b35\'), row=1, col=3)
+    fig.add_trace(go.Bar(x=['V'], y=[voltage], marker_color='#00d4ff'), row=1, col=1)
+    fig.add_trace(go.Bar(x=['A'], y=[current], marker_color='#00ff9d'), row=1, col=2)
+    fig.add_trace(go.Bar(x=['T'], y=[temperature], marker_color='#ff6b35'), row=1, col=3)
     fig.update_layout(**PLOT_BG, height=250, showlegend=False, margin=dict(l=10,r=10,t=30,b=10))
     return fig
 
@@ -184,7 +181,7 @@ st.markdown("""
 tab1, tab2, tab3 = st.tabs(["🔮 LIVE PREDICTION", "📊 PERFORMANCE", "ℹ️ ABOUT"])
 
 with tab1:
-    st.markdown("<div class=\'sec\'>◈ ENTER BATTERY MEASUREMENTS</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sec'>◈ ENTER BATTERY MEASUREMENTS</div>", unsafe_allow_html=True)
     c1,c2,c3 = st.columns(3)
     with c1: voltage = st.number_input("Voltage", 6.0, 8.2, 7.40, step=0.01)
     with c2: current = st.number_input("Current", -10.0, 10.0, 1.20, step=0.01)
@@ -195,7 +192,7 @@ with tab1:
             power = voltage * current
             soh, usability, probs = predict_one(voltage, current, power, temperature, 1, 1 if current >=0 else 0, scaler, lstm_reg, lstm_cls)
             
-            st.markdown(f"<div class=\'icard\'>Result: <b>{usability.upper()}</b> | SoH Estimate: <b>{soh:.2f}%</b></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='icard'>Result: <b>{usability.upper()}</b> | SoH Estimate: <b>{soh:.2f}%</b></div>", unsafe_allow_html=True)
             
             # Graphs
             gc1, gc2 = st.columns(2)
@@ -214,12 +211,3 @@ st.markdown(f"""
     BSc (Hons) Electrotechnology | Wayamba University of Sri Lanka
 </div>
 """, unsafe_allow_html=True)
-'''
-
-# Write to file
-with open('app.py', 'w') as f:
-    f.write(app_code)
-
-# Download to local PC
-files.download('app.py')
-print("✅ Done! 'app.py' has been modified and download triggered.")
