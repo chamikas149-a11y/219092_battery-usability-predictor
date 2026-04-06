@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -23,20 +24,6 @@ st.markdown("""
     [data-testid="stSidebar"]{background:#060e1c;border-right:1px solid var(--border);}
     #MainMenu,footer,header{visibility:hidden;}
     .block-container{padding:1.5rem 2rem;}
-
-    /* ── Mobile responsive ── */
-    @media (max-width: 768px) {
-        .block-container{padding:0.8rem 0.8rem !important;}
-        .hero{padding:1.2rem 1rem !important;}
-        .hero-title{font-size:1.4rem !important;}
-        [data-testid="stSlider"]{width:100% !important;}
-        [data-testid="column"]{min-width:100% !important;width:100% !important;}
-        [data-testid="stSlider"] > div > div > div{height:28px !important;}
-        [data-testid="stSlider"] input[type="range"]{height:28px !important;cursor:pointer;}
-        [data-testid="stSlider"] input[type="range"]::-webkit-slider-thumb{
-            width:32px !important;height:32px !important;cursor:pointer;}
-    }
-
     .hero{background:linear-gradient(135deg,#0a1628,#0d1f3c);border:1px solid var(--border);
           border-top:2px solid var(--cyan);border-radius:12px;padding:2rem 2.5rem;margin-bottom:1.5rem;}
     .hero-title{font-family:Rajdhani,sans-serif;font-size:2.2rem;font-weight:700;
@@ -96,21 +83,21 @@ FEATURES = ['Voltage','Current','Power','Temperature','CycleCount','State_encode
 CLASS_NAMES = ['Poor','Fair','Good']
 CLASS_COLORS = {'Poor':'#ff3366','Fair':'#ff6b35','Good':'#00ff9d'}
 
-# ── TensorFlow fix: try tensorflow first, fallback to standalone keras ──
 @st.cache_resource
 def load_models():
     try:
-        try:
-            from tensorflow.keras.models import load_model
-        except ImportError:
-            from keras.models import load_model
-        reg = load_model('models/best_lstm_regression.keras',    compile=False)
-        cls = load_model('models/best_lstm_classification.keras', compile=False)
-        with open('models/scaler_X.pkl', 'rb') as f:
+        import os
+        os.environ['KERAS_BACKEND'] = 'numpy'
+        import os
+        os.environ['KERAS_BACKEND'] = 'numpy'
+        import keras
+        reg    = keras.models.load_model('best_lstm_regression.keras')
+        cls    = keras.models.load_model('best_lstm_classification.keras')
+        with open('scaler_X.pkl', 'rb') as f:
             scaler = pickle.load(f)
         return reg, cls, scaler, True
     except Exception as e:
-        st.warning(f"Model load error: {e}")
+        st.warning(f"⚠️ Model load error: {e}")
         return None, None, None, False
 
 def predict_one(v,i,p,t,c,s,scaler,reg,cls):
@@ -145,43 +132,6 @@ with st.sidebar:
         <div style='margin-top:0.4rem;color:{"#00ff9d" if loaded else "#ff3366"};'>
             {"● LOADED" if loaded else "● NOT LOADED"}</div>
     </div>""", unsafe_allow_html=True)
-
-    # ── SIDEBAR QUICK PREDICT ──────────────────────────────
-    st.markdown("<hr style='border-color:#1a3a5c;'>", unsafe_allow_html=True)
-    st.markdown("<div style='font-family:Rajdhani,sans-serif;font-size:1rem;font-weight:600;"
-                "color:#00d4ff;letter-spacing:2px;margin-bottom:0.5rem;'>⚡ QUICK PREDICT</div>",
-                unsafe_allow_html=True)
-
-    sb_voltage = st.number_input("Voltage (V)", min_value=6.0, max_value=8.2,  value=7.4, step=0.01, format="%.2f", key="sb_v")
-    sb_current = st.number_input("Current (A)", min_value=-5.0, max_value=5.0, value=1.2, step=0.01, format="%.2f", key="sb_i")
-    sb_power   = st.number_input("Power (W)",   min_value=-30.0,max_value=30.0,value=8.88,step=0.01, format="%.2f", key="sb_p")
-    sb_temp    = st.number_input("Temp (°C)",   min_value=20.0, max_value=60.0,value=35.0,step=0.1,  format="%.1f", key="sb_t")
-    sb_cycle   = st.number_input("Cycle",       min_value=1,    max_value=20,  value=5,   step=1,                   key="sb_c")
-    sb_state   = st.selectbox("State", ["CHARGING","DISCHARGING"], key="sb_s")
-    sb_enc     = 1 if sb_state == "CHARGING" else 0
-
-    sb_soh_est = max(0, min(100, ((sb_voltage - V_MIN) / (V_MAX - V_MIN)) * 100))
-
-    if st.button("🔮 PREDICT", key="sb_predict"):
-        if not loaded:
-            st.error("Models not loaded!")
-        else:
-            sb_soh, sb_usability, sb_probs = predict_one(
-                sb_voltage, sb_current, sb_power, sb_temp,
-                sb_cycle, sb_enc, scaler, lstm_reg, lstm_cls)
-            sb_color = CLASS_COLORS[sb_usability]
-            sb_emoji = {'Good':'✅','Fair':'⚠️','Poor':'❌'}[sb_usability]
-            st.markdown(f"""
-            <div style='background:rgba(0,212,255,0.05);border:1px solid #1a3a5c;
-                        border-left:3px solid {sb_color};border-radius:8px;
-                        padding:0.8rem;margin-top:0.4rem;text-align:center;'>
-                <div style='font-family:Share Tech Mono,monospace;font-size:0.7rem;color:#7ba7cc;'>STATE OF HEALTH</div>
-                <div style='font-family:Rajdhani,sans-serif;font-size:1.8rem;font-weight:700;color:{sb_color};'>{sb_soh:.1f}%</div>
-                <div style='font-family:Rajdhani,sans-serif;font-size:1rem;font-weight:600;color:{sb_color};'>{sb_emoji} {sb_usability.upper()}</div>
-                <div style='font-family:Share Tech Mono,monospace;font-size:0.65rem;color:#7ba7cc;margin-top:0.3rem;'>
-                    Poor:{sb_probs[0]*100:.0f}% Fair:{sb_probs[1]*100:.0f}% Good:{sb_probs[2]*100:.0f}%
-                </div>
-            </div>""", unsafe_allow_html=True)
 
 # ── DASHBOARD ──────────────────────────────────────────────
 if page == "🏠 Dashboard":
@@ -253,28 +203,16 @@ elif page == "🔮 Live Prediction":
 
     with tab1:
         st.markdown("<div class='sec'>◈ BATTERY PARAMETERS</div>",unsafe_allow_html=True)
-        st.markdown("<div class='icard'>📱 Mobile: use number boxes below &nbsp;|&nbsp; 🖥️ Desktop: use sliders in expander</div>",
-                    unsafe_allow_html=True)
-
-        # Number inputs — work perfectly on mobile
         c1,c2 = st.columns(2)
         with c1:
-            voltage     = st.number_input("⚡ VOLTAGE (V)",     min_value=6.0,  max_value=8.2,  value=7.4,  step=0.01, format="%.2f")
-            current     = st.number_input("🔌 CURRENT (A)",     min_value=-5.0, max_value=5.0,  value=1.2,  step=0.01, format="%.2f")
-            power       = st.number_input("💡 POWER (W)",       min_value=-30.0,max_value=30.0, value=8.88, step=0.01, format="%.2f")
+            voltage     = st.slider("⚡ VOLTAGE (V)",6.0,8.2,7.4,0.01)
+            current     = st.slider("🔌 CURRENT (A)",-5.0,5.0,1.2,0.01)
+            power       = st.slider("💡 POWER (W)",-30.0,30.0,float(round(7.4*1.2,2)),0.01)
         with c2:
-            temperature = st.number_input("🌡️ TEMPERATURE (°C)",min_value=20.0, max_value=60.0, value=35.0, step=0.1,  format="%.1f")
-            cycle_count = st.number_input("🔄 CYCLE COUNT",     min_value=1,    max_value=20,   value=5,    step=1)
+            temperature = st.slider("🌡️ TEMPERATURE (°C)",20.0,60.0,35.0,0.1)
+            cycle_count = st.slider("🔄 CYCLE COUNT",1,20,5,1)
             state       = st.selectbox("🔋 STATE",["CHARGING","DISCHARGING"])
             state_enc   = 1 if state=="CHARGING" else 0
-
-        # Sliders in expander for desktop
-        with st.expander("🎚️ SLIDERS (desktop convenience)"):
-            voltage     = st.slider("⚡ VOLTAGE (V)",     6.0,  8.2,  float(voltage),  0.01)
-            current     = st.slider("🔌 CURRENT (A)",    -5.0,  5.0,  float(current),  0.01)
-            power       = st.slider("💡 POWER (W)",      -30.0, 30.0, float(power),    0.01)
-            temperature = st.slider("🌡️ TEMP (°C)",      20.0,  60.0, float(temperature), 0.1)
-            cycle_count = st.slider("🔄 CYCLES",          1,    20,   int(cycle_count), 1)
 
         soh_est = max(0,min(100,((voltage-V_MIN)/(V_MAX-V_MIN))*100))
         st.markdown(f"""<div class='icard'>
@@ -325,7 +263,7 @@ elif page == "🔮 Live Prediction":
     with tab2:
         st.markdown("<div class='sec'>◈ CSV FILE UPLOAD</div>",unsafe_allow_html=True)
         st.markdown("""<div class='icard'>
-            📋 Required columns: <strong>Voltage, Current, Power,
+            📋 Required columns: <strong>Voltage, Current, Power, 
             Temperature, CycleCount, State_encoded</strong><br>
             State_encoded: 1=CHARGING, 0=DISCHARGING
         </div>""",unsafe_allow_html=True)
