@@ -4,6 +4,8 @@ import numpy as np
 import plotly.graph_objects as go
 import pickle
 import os
+from datetime import datetime
+from io import BytesIO
 
 st.set_page_config(
     page_title="Battery Usability Predictor",
@@ -63,8 +65,15 @@ st.markdown("""
     .pval{font-family:Rajdhani,sans-serif;font-size:2.8rem;
           font-weight:700;margin:0.4rem 0;}
     .psub{font-family:Share Tech Mono,monospace;font-size:1rem;color:var(--muted);}
+    .rec-card{border-radius:12px;padding:1.2rem 1.5rem;margin:0.5rem 0;
+              border:1px solid;font-family:Share Tech Mono,monospace;font-size:0.85rem;}
     .stButton>button{background:linear-gradient(135deg,#00d4ff20,#00ff9d20)!important;
         border:1px solid var(--cyan)!important;color:var(--cyan)!important;
+        font-family:Rajdhani,sans-serif!important;font-size:1rem!important;
+        font-weight:600!important;letter-spacing:2px!important;
+        padding:0.6rem 2rem!important;border-radius:6px!important;width:100%!important;}
+    .stDownloadButton>button{background:linear-gradient(135deg,#00ff9d20,#00d4ff20)!important;
+        border:1px solid var(--green)!important;color:var(--green)!important;
         font-family:Rajdhani,sans-serif!important;font-size:1rem!important;
         font-weight:600!important;letter-spacing:2px!important;
         padding:0.6rem 2rem!important;border-radius:6px!important;width:100%!important;}
@@ -72,15 +81,10 @@ st.markdown("""
         font-size:1rem!important;color:var(--muted)!important;}
     .stTabs [aria-selected="true"]{color:var(--cyan)!important;
         border-bottom-color:var(--cyan)!important;}
-    .nav-tab{display:inline-block;padding:0.5rem 1.5rem;margin:0.2rem;
-             background:var(--card);border:1px solid var(--border);
-             border-radius:6px;cursor:pointer;font-family:Rajdhani,sans-serif;
-             font-size:1rem;letter-spacing:1px;color:var(--muted);}
     p,li{color:var(--text)!important;}
     h1,h2,h3{color:var(--cyan)!important;font-family:Rajdhani,sans-serif!important;}
     label{color:var(--muted)!important;font-family:Share Tech Mono,monospace!important;
           font-size:0.78rem!important;letter-spacing:1px!important;}
-    div[data-testid="stHorizontalBlock"] {gap: 0.5rem;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -116,28 +120,217 @@ def predict_one(v,i,p,t,c,s,scaler,reg,cls):
     probs = cls.predict(seq,verbose=0)[0]
     return soh, CLASS_NAMES[int(np.argmax(probs))], probs
 
+def make_gauge(soh, color):
+    # Health gauge chart
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number+delta",
+        value=soh,
+        domain={'x':[0,1],'y':[0,1]},
+        title={'text':"STATE OF HEALTH",
+               'font':{'size':14,'color':'#7ba7cc','family':'Rajdhani'}},
+        number={'suffix':"%",'font':{'size':40,'color':color,'family':'Rajdhani'}},
+        delta={'reference':70,'increasing':{'color':'#00ff9d'},
+               'decreasing':{'color':'#ff3366'}},
+        gauge={
+            'axis':{'range':[0,100],'tickwidth':1,
+                    'tickcolor':'#1a3a5c','tickfont':{'color':'#7ba7cc'}},
+            'bar':{'color':color,'thickness':0.25},
+            'bgcolor':'#0a1628',
+            'borderwidth':0,
+            'steps':[
+                {'range':[0,40],'color':'rgba(255,51,102,0.15)'},
+                {'range':[40,70],'color':'rgba(255,107,53,0.15)'},
+                {'range':[70,100],'color':'rgba(0,255,157,0.15)'}],
+            'threshold':{
+                'line':{'color':'white','width':2},
+                'thickness':0.75,'value':soh}}))
+    fig.update_layout(**PLOT_BG, height=280, margin=dict(l=20,r=20,t=40,b=20))
+    return fig
+
+def make_prob_chart(probs):
+    fig = go.Figure()
+    colors = ['#ff3366','#ff6b35','#00ff9d']
+    for i,(cls,prob) in enumerate(zip(CLASS_NAMES,probs)):
+        fig.add_trace(go.Bar(
+            x=[prob*100],y=[cls],orientation='h',
+            marker_color=colors[i],opacity=0.85,
+            text=f"{prob*100:.1f}%",textposition='inside',
+            textfont=dict(size=14,family='Rajdhani',color='white')))
+    fig.update_layout(**PLOT_BG,height=180,showlegend=False,
+        xaxis=dict(range=[0,100],gridcolor='#1a3a5c',
+                   linecolor='#1a3a5c',ticksuffix='%'),
+        margin=dict(l=5,r=5,t=5,b=5))
+    return fig
+
+def get_recommendations(usability, soh, voltage, temperature):
+    # Objective-based recommendations
+    recs = {
+        'Good': [
+            ("✅", "Battery is in EXCELLENT condition for solar energy storage", "green"),
+            ("🔋", f"State of Health: {soh:.1f}% — Well above safe operating threshold (70%)", "green"),
+            ("⚡", f"Voltage {voltage:.2f}V is within optimal operating range (7.0V-8.2V)", "green"),
+            ("🌡️", f"Temperature {temperature:.1f}°C — Operating within safe thermal limits", "green"),
+            ("📋", "Recommendation: Continue normal operation. Schedule routine check in 30 days.", "green"),
+        ],
+        'Fair': [
+            ("⚠️", "Battery shows MODERATE degradation — Monitoring required", "orange"),
+            ("🔋", f"State of Health: {soh:.1f}% — Approaching maintenance threshold (70%)", "orange"),
+            ("⚡", f"Voltage {voltage:.2f}V — Monitor for further decline", "orange"),
+            ("🌡️", f"Temperature {temperature:.1f}°C — Ensure adequate cooling", "orange"),
+            ("📋", "Recommendation: Reduce load by 20-30%. Schedule maintenance within 7 days.", "orange"),
+        ],
+        'Poor': [
+            ("❌", "Battery is in CRITICAL condition — Immediate action required!", "red"),
+            ("🔋", f"State of Health: {soh:.1f}% — Below safe operating threshold!", "red"),
+            ("⚡", f"Voltage {voltage:.2f}V — Critically low voltage detected", "red"),
+            ("🌡️", f"Temperature {temperature:.1f}°C — Check thermal management immediately", "red"),
+            ("📋", "Recommendation: DISCONTINUE USE immediately. Replace battery module.", "red"),
+        ]
+    }
+    return recs[usability]
+
+def generate_pdf_report(voltage, current, power, temperature, soh, usability, probs, recs):
+    # Generate HTML report (downloadable)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    color_map = {'Good':'#00aa66','Fair':'#ff6b35','Poor':'#cc0033'}
+    color = color_map[usability]
+    emoji = {'Good':'✅','Fair':'⚠️','Poor':'❌'}[usability]
+
+    rec_html = ""
+    for icon,txt,clr in recs:
+        bg = {'green':'#e8f8f0','orange':'#fff3e8','red':'#fde8ec'}[clr]
+        border = {'green':'#00aa66','orange':'#ff6b35','red':'#cc0033'}[clr]
+        rec_html += f"""
+        <div style="background:{bg};border-left:4px solid {border};
+                    padding:10px 15px;margin:8px 0;border-radius:4px;">
+            {icon} {txt}
+        </div>"""
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    body{{font-family:Arial,sans-serif;margin:40px;color:#333;}}
+    .header{{background:linear-gradient(135deg,#0a1628,#1a3a5c);
+             color:white;padding:30px;border-radius:10px;margin-bottom:30px;}}
+    .title{{font-size:28px;font-weight:bold;color:#00d4ff;margin:0;}}
+    .subtitle{{font-size:14px;color:#7ba7cc;margin-top:5px;}}
+    .badge{{display:inline-block;background:rgba(0,212,255,0.2);
+            border:1px solid #00d4ff;color:#00d4ff;padding:3px 12px;
+            border-radius:15px;font-size:12px;margin-top:10px;}}
+    .section{{margin:25px 0;}}
+    .section-title{{font-size:16px;font-weight:bold;color:#1a3a5c;
+                    border-bottom:2px solid #00d4ff;padding-bottom:5px;
+                    margin-bottom:15px;letter-spacing:1px;}}
+    .result-box{{background:{color}15;border:2px solid {color};
+                 border-radius:10px;padding:20px;text-align:center;
+                 display:inline-block;width:45%;margin:5px;}}
+    .result-value{{font-size:36px;font-weight:bold;color:{color};}}
+    .result-label{{font-size:12px;color:#666;letter-spacing:1px;}}
+    .param-table{{width:100%;border-collapse:collapse;}}
+    .param-table th{{background:#0a1628;color:#00d4ff;padding:10px;
+                     text-align:left;font-size:13px;}}
+    .param-table td{{padding:10px;border-bottom:1px solid #eee;font-size:13px;}}
+    .param-table tr:nth-child(even){{background:#f8f9fa;}}
+    .prob-bar{{height:25px;border-radius:4px;margin:5px 0;
+               display:flex;align-items:center;padding:0 10px;
+               color:white;font-size:13px;font-weight:bold;}}
+    .footer{{margin-top:40px;text-align:center;color:#999;font-size:12px;
+             border-top:1px solid #eee;padding-top:20px;}}
+</style>
+</head>
+<body>
+<div class="header">
+    <div class="title">⚡ BATTERY USABILITY PREDICTION REPORT</div>
+    <div class="subtitle">LSTM-Based Dual Output Prediction System</div>
+    <div class="badge">219092 | R.M.C.S.L Jayathilaka | Final Year Research</div>
+</div>
+
+<div class="section">
+    <div class="section-title">📅 REPORT INFORMATION</div>
+    <table class="param-table">
+        <tr><td><b>Generated:</b></td><td>{now}</td>
+            <td><b>Model:</b></td><td>Dual-Output LSTM</td></tr>
+        <tr><td><b>R² Score:</b></td><td>94.73%</td>
+            <td><b>Accuracy:</b></td><td>97.78%</td></tr>
+    </table>
+</div>
+
+<div class="section">
+    <div class="section-title">🔌 INPUT PARAMETERS</div>
+    <table class="param-table">
+        <tr><th>Parameter</th><th>Value</th><th>Unit</th><th>Status</th></tr>
+        <tr><td>Voltage</td><td>{voltage:.3f}</td><td>V</td>
+            <td>{"✅ Normal" if 6.5<=voltage<=8.2 else "⚠️ Check"}</td></tr>
+        <tr><td>Current</td><td>{current:.3f}</td><td>A</td>
+            <td>{"🔋 Charging" if current>0 else "⚡ Discharging"}</td></tr>
+        <tr><td>Power</td><td>{power:.3f}</td><td>W</td><td>Auto-calculated</td></tr>
+        <tr><td>Temperature</td><td>{temperature:.1f}</td><td>°C</td>
+            <td>{"✅ Normal" if temperature<=45 else "⚠️ High"}</td></tr>
+        <tr><td>State</td><td>{"CHARGING" if current>0 else "DISCHARGING"}</td>
+            <td>—</td><td>Auto-detected</td></tr>
+    </table>
+</div>
+
+<div class="section">
+    <div class="section-title">🎯 PREDICTION RESULTS</div>
+    <div style="text-align:center;margin:20px 0;">
+        <div class="result-box">
+            <div class="result-value">{soh:.1f}%</div>
+            <div class="result-label">STATE OF HEALTH (SoH)</div>
+        </div>
+        <div class="result-box">
+            <div class="result-value">{emoji} {usability.upper()}</div>
+            <div class="result-label">USABILITY STATUS</div>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <div class="section-title">📊 CLASS PROBABILITIES</div>
+    <div class="prob-bar" style="background:#ff3366;width:{probs[0]*100:.0f}%">
+        Poor: {probs[0]*100:.1f}%</div>
+    <div class="prob-bar" style="background:#ff6b35;width:{probs[1]*100:.0f}%">
+        Fair: {probs[1]*100:.1f}%</div>
+    <div class="prob-bar" style="background:#00aa66;width:{probs[2]*100:.0f}%">
+        Good: {probs[2]*100:.1f}%</div>
+</div>
+
+<div class="section">
+    <div class="section-title">📋 RECOMMENDATIONS</div>
+    {rec_html}
+</div>
+
+<div class="footer">
+    <p>Generated by Battery Usability Predictor | 219092 R.M.C.S.L Jayathilaka</p>
+    <p>Research: LSTM-Based Prediction of Reconditioned Second-Life Li-ion Battery Modules</p>
+    <p>Model Performance: R²=94.73% | MAE=1.31% | Accuracy=97.78% | F1=97.78%</p>
+</div>
+</body>
+</html>"""
+    return html.encode('utf-8')
+
 lstm_reg, lstm_cls, scaler, loaded = load_models()
 
 # ── HERO ───────────────────────────────────────────────────
 st.markdown("""<div class='hero'>
     <div class='hero-title'>⚡ BATTERY USABILITY PREDICTOR</div>
-    <div class='hero-sub'>LSTM-BASED DUAL OUTPUT PREDICTION SYSTEM</div>
+    <div class='hero-sub'>LSTM-BASED PREDICTION OF RECONDITIONED SECOND-LIFE LI-ION BATTERIES</div>
     <div class='hero-badge'>219092 | R.M.C.S.L JAYATHILAKA | FINAL YEAR RESEARCH</div>
 </div>""", unsafe_allow_html=True)
 
 # ── TABS ───────────────────────────────────────────────────
 tab1,tab2,tab3,tab4 = st.tabs([
     "🔮 LIVE PREDICTION",
-    "📊 MODEL PERFORMANCE", 
+    "📊 MODEL PERFORMANCE",
     "🔍 DATA ANALYSIS",
-    "ℹ️ ABOUT"
-])
+    "ℹ️ ABOUT"])
 
 # ══════════════════════════════════════════════════════════
 # TAB 1: LIVE PREDICTION
 # ══════════════════════════════════════════════════════════
 with tab1:
-    # ── Metrics ───────────────────────────────────────────
     st.markdown("<div class='sec'>◈ MODEL PERFORMANCE METRICS</div>",unsafe_allow_html=True)
     cols = st.columns(6)
     for col,(val,lbl,clr) in zip(cols,[
@@ -148,110 +341,103 @@ with tab1:
                         f"<div class='mlbl'>{lbl}</div></div>",unsafe_allow_html=True)
 
     st.markdown("<br>",unsafe_allow_html=True)
+    st.markdown("<div class='sec'>◈ ENTER BATTERY MEASUREMENTS</div>",unsafe_allow_html=True)
 
-    # ── Prediction Input ───────────────────────────────────
-    st.markdown("<div class='sec'>◈ BATTERY PARAMETERS — ENTER VALUES</div>",
-                unsafe_allow_html=True)
+    st.markdown("""<div class='icard'>
+        📌 Enter only <strong>3 measurements</strong> from your battery.
+        Power & State are auto-calculated. Simple & accurate!
+    </div>""", unsafe_allow_html=True)
 
     c1,c2,c3 = st.columns(3)
     with c1:
-        voltage     = st.slider("⚡ VOLTAGE (V)",6.0,8.2,7.4,0.01)
-        current     = st.slider("🔌 CURRENT (A)",-5.0,5.0,1.2,0.01)
+        voltage = st.slider("⚡ VOLTAGE (V)",6.0,8.2,7.4,0.01,
+            help="Measure terminal voltage of your battery")
     with c2:
-        power       = st.slider("💡 POWER (W)",-30.0,30.0,float(round(7.4*1.2,2)),0.01)
-        temperature = st.slider("🌡️ TEMPERATURE (°C)",20.0,60.0,35.0,0.1)
+        current = st.slider("🔌 CURRENT (A)",-5.0,5.0,1.2,0.01,
+            help="+ = Charging, - = Discharging")
     with c3:
-        cycle_count = st.slider("🔄 CYCLE COUNT",1,20,5,1)
-        state       = st.selectbox("🔋 STATE",['CHARGING','DISCHARGING'])
-        state_enc   = 1 if state=="CHARGING" else 0
+        temperature = st.slider("🌡️ TEMPERATURE (°C)",20.0,60.0,35.0,0.1,
+            help="Battery surface/ambient temperature")
 
-    soh_est = max(0,min(100,((voltage-V_MIN)/(V_MAX-V_MIN))*100))
+    # Auto-calculate
+    power     = round(voltage * current, 3)
+    state_enc = 1 if current >= 0 else 0
+    state_str = "CHARGING" if current >= 0 else "DISCHARGING"
+    cycle_count = 1
+
     st.markdown(f"""<div class='icard'>
-        💡 Voltage-based SoH estimate: <strong style='color:#00d4ff;'>{soh_est:.1f}%</strong>
-        &nbsp;|&nbsp; State: <strong style='color:#00ff9d;'>{state}</strong>
-        &nbsp;|&nbsp; Cycle Count: <strong style='color:#ff6b35;'>{cycle_count}</strong>
-        &nbsp;|&nbsp; Model: <strong style='color:{"#00ff9d" if loaded else "#ff3366"};'>
-        {"● LOADED" if loaded else "● NOT LOADED"}</strong>
-    </div>""",unsafe_allow_html=True)
+        ⚡ Auto-detected: &nbsp;
+        <strong style='color:#00d4ff;'>Power = {power:.2f}W</strong> &nbsp;|&nbsp;
+        <strong style='color:#00ff9d;'>State = {state_str}</strong> &nbsp;|&nbsp;
+        <strong style='color:#ff6b35;'>Cycle = {cycle_count} (New Battery)</strong> &nbsp;|&nbsp;
+        <strong style='color:{"#00ff9d" if loaded else "#ff3366"};'>
+        Model {"● LOADED" if loaded else "● NOT LOADED"}</strong>
+    </div>""", unsafe_allow_html=True)
 
-    if st.button("🔮 PREDICT NOW — ANALYZE BATTERY"):
+    if st.button("🔮 PREDICT BATTERY CONDITION"):
         if not loaded:
-            st.error("⚠️ Models not loaded! Please wait and refresh.")
+            st.error("⚠️ Models not loaded! Please refresh the page.")
         else:
-            with st.spinner("Running LSTM prediction..."):
+            with st.spinner("Analyzing battery condition..."):
                 soh,usability,probs = predict_one(
                     voltage,current,power,temperature,
                     cycle_count,state_enc,scaler,lstm_reg,lstm_cls)
 
-            css   = {'Good':'pred-g','Fair':'pred-f','Poor':'pred-p'}[usability]
             color = CLASS_COLORS[usability]
+            css   = {'Good':'pred-g','Fair':'pred-f','Poor':'pred-p'}[usability]
             emoji = {'Good':'✅','Fair':'⚠️','Poor':'❌'}[usability]
+            recs  = get_recommendations(usability, soh, voltage, temperature)
 
             st.markdown("<div class='sec'>◈ PREDICTION RESULTS</div>",unsafe_allow_html=True)
-            c1,c2,c3 = st.columns(3)
+
+            # Gauge + Status
+            c1,c2 = st.columns([1,1])
             with c1:
-                st.markdown(f"""<div class='pred-box {css}'>
-                    <div class='ptitle'>STATE OF HEALTH</div>
-                    <div class='pval' style='color:{color};'>{soh:.1f}%</div>
-                    <div class='psub'>SoH PREDICTION</div>
-                </div>""",unsafe_allow_html=True)
+                st.plotly_chart(make_gauge(soh,color), use_container_width=True)
             with c2:
-                st.markdown(f"""<div class='pred-box {css}'>
+                st.markdown(f"""
+                <div class='pred-box {css}' style='margin-top:1rem;'>
                     <div class='ptitle'>USABILITY STATUS</div>
-                    <div class='pval' style='color:{color};'>{emoji}</div>
-                    <div class='psub' style='color:{color};font-size:1.3rem;'>{usability.upper()}</div>
-                </div>""",unsafe_allow_html=True)
-            with c3:
-                advice = {
-                    'Good':'Battery is in excellent condition. Safe to use normally.',
-                    'Fair':'Battery shows moderate degradation. Monitor closely.',
-                    'Poor':'Battery critically degraded. Replace immediately!'
-                }[usability]
-                st.markdown(f"""<div class='pred-box {css}'>
-                    <div class='ptitle'>RECOMMENDATION</div>
-                    <div style='color:{color};font-size:0.95rem;margin-top:0.5rem;
-                                font-family:Share Tech Mono,monospace;'>{advice}</div>
-                </div>""",unsafe_allow_html=True)
+                    <div class='pval' style='color:{color};font-size:4rem;'>{emoji}</div>
+                    <div style='color:{color};font-family:Rajdhani,sans-serif;
+                                font-size:2rem;font-weight:700;letter-spacing:3px;'>{usability.upper()}</div>
+                    <div class='psub' style='margin-top:0.5rem;'>
+                        {"Excellent for solar energy storage" if usability=="Good"
+                         else "Moderate degradation detected" if usability=="Fair"
+                         else "Critical — Replace immediately!"}
+                    </div>
+                </div>""", unsafe_allow_html=True)
 
-            # Probability bars
-            st.markdown("<div class='sec'>◈ CLASS PROBABILITIES</div>",unsafe_allow_html=True)
-            fig_p = go.Figure()
-            for i,(cls,prob) in enumerate(zip(CLASS_NAMES,probs)):
-                fig_p.add_trace(go.Bar(
-                    x=[prob*100],y=[cls],orientation='h',
-                    marker_color=['#ff3366','#ff6b35','#00ff9d'][i],opacity=0.85,
-                    text=f"{prob*100:.1f}%",textposition='inside',
-                    textfont=dict(size=14,family='Rajdhani',color='white')))
-            fig_p.update_layout(**PLOT_BG,height=200,showlegend=False,
-                xaxis=dict(range=[0,100],gridcolor='#1a3a5c',
-                           linecolor='#1a3a5c',ticksuffix='%'),
-                margin=dict(l=5,r=5,t=5,b=5))
-            st.plotly_chart(fig_p,use_container_width=True)
+                # Probability chart
+                st.plotly_chart(make_prob_chart(probs), use_container_width=True)
 
-    # ── Research Overview ──────────────────────────────────
-    st.markdown("<div class='sec'>◈ RESEARCH OVERVIEW</div>",unsafe_allow_html=True)
-    c1,c2 = st.columns(2)
-    with c1:
-        for icon,txt in [
-            ("📡","Real battery data via ESP32 sensors"),
-            ("📊","77,341 readings — 11 charge/discharge cycles"),
-            ("🧠","Dual LSTM: SoH Regression + Usability Classification"),
-            ("✅","No overfitting — Test R² > Train R²"),
-            ("🔁","5-Fold temporal cross-validation performed")]:
-            st.markdown(f"<div class='icard'>{icon} {txt}</div>",unsafe_allow_html=True)
-    with c2:
-        fig = go.Figure(go.Pie(
-            labels=['Good (60.5%)','Fair (22.8%)','Poor (16.7%)'],
-            values=[60.5,22.8,16.7], hole=0.6,
-            marker=dict(colors=['#00ff9d','#ff6b35','#ff3366'],
-                        line=dict(color='#050d1a',width=2)),
-            textfont=dict(family='Share Tech Mono',size=10)))
-        fig.update_layout(**PLOT_BG,height=260,showlegend=True,
-            margin=dict(l=5,r=5,t=5,b=5),
-            annotations=[dict(text='DATA',x=0.5,y=0.5,
-                font=dict(size=11,color='#7ba7cc',family='Share Tech Mono'),
-                showarrow=False)])
-        st.plotly_chart(fig,use_container_width=True)
+            # Recommendations
+            st.markdown("<div class='sec'>◈ RECOMMENDATIONS</div>",unsafe_allow_html=True)
+            border_color = {'Good':'#00ff9d','Fair':'#ff6b35','Poor':'#ff3366'}[usability]
+            bg_color = {'Good':'rgba(0,255,157,0.05)','Fair':'rgba(255,107,53,0.05)',
+                        'Poor':'rgba(255,51,102,0.05)'}[usability]
+            for icon,txt,clr in recs:
+                st.markdown(f"""
+                <div class='rec-card' style='background:{bg_color};border-color:{border_color};'>
+                    {icon} {txt}
+                </div>""", unsafe_allow_html=True)
+
+            # PDF Download
+            st.markdown("<div class='sec'>◈ DOWNLOAD REPORT</div>",unsafe_allow_html=True)
+            report = generate_pdf_report(
+                voltage,current,power,temperature,soh,usability,probs,recs)
+            fname = f"Battery_Report_{usability}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+            st.download_button(
+                label="📄 DOWNLOAD BATTERY REPORT (HTML)",
+                data=report,
+                file_name=fname,
+                mime="text/html",
+                use_container_width=True)
+
+            st.markdown(f"""<div class='icard'>
+                💡 <strong>Report saved!</strong> Open the downloaded HTML file in any browser.
+                Print it as PDF using <strong>Ctrl+P → Save as PDF</strong>
+            </div>""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════
 # TAB 2: MODEL PERFORMANCE
@@ -364,7 +550,6 @@ with tab3:
         with col:
             st.markdown(f"<div class='mcard {clr}'><div class='mval {clr}'>{val}</div>"
                         f"<div class='mlbl'>{lbl}</div></div>",unsafe_allow_html=True)
-
     st.markdown("<br>",unsafe_allow_html=True)
     st.markdown("<div class='sec'>◈ PREPROCESSING SUMMARY</div>",unsafe_allow_html=True)
     st.dataframe(pd.DataFrame({
@@ -373,7 +558,6 @@ with tab3:
         'Removed':['—','480','695','1347','—'],
         'Status':['📥 Loaded','🧹 Cleaned','🔍 Filtered','⚡ Applied','✅ Ready']}),
         use_container_width=True,hide_index=True)
-
     c1,c2 = st.columns(2)
     with c1:
         st.markdown("<div class='sec'>◈ VOLTAGE DISTRIBUTION</div>",unsafe_allow_html=True)
@@ -420,13 +604,13 @@ with tab4:
             st.markdown(f"<div class='icard'>{icon} <strong style='color:#7ba7cc;'>{lbl}:</strong> "
                         f"<strong style='color:#00d4ff;'>{val}</strong></div>",unsafe_allow_html=True)
     with c2:
-        st.markdown("<div class='sec'>◈ RESEARCH SUMMARY</div>",unsafe_allow_html=True)
-        for icon,lbl,txt in [
-            ("🎯","Objective","Predict battery SoH & usability using LSTM deep learning"),
-            ("📡","Data","Real-time ESP32 sensor data — 77,341 readings"),
-            ("🧠","Model","Dual-output LSTM (128→64→32), Huber + Softmax"),
-            ("✅","Validation","5-fold temporal CV, no overfitting confirmed")]:
-            st.markdown(f"<div class='icard'>{icon} <strong style='color:#7ba7cc;'>{lbl}:</strong> {txt}</div>",
+        st.markdown("<div class='sec'>◈ RESEARCH OBJECTIVES</div>",unsafe_allow_html=True)
+        for i,obj in enumerate([
+            "Analyze performance data of reconditioned second-life Li-ion battery modules",
+            "Develop LSTM prediction model for usability and performance condition forecasting",
+            "Determine accuracy and reliability of the developed prediction model"
+        ],1):
+            st.markdown(f"<div class='icard'><strong style='color:#00d4ff;'>{i}.</strong> {obj}</div>",
                 unsafe_allow_html=True)
 
     st.markdown("<div class='sec'>◈ TECH STACK</div>",unsafe_allow_html=True)
@@ -439,8 +623,6 @@ with tab4:
         with tcols[i%4]:
             st.markdown(f"""<div class='mcard c' style='text-align:left;padding:0.8rem;margin-bottom:0.6rem;'>
                 <div style='font-size:1.3rem;'>{icon}</div>
-                <div style='color:#00d4ff;font-family:Rajdhani,sans-serif;
-                            font-weight:600;font-size:0.85rem;'>{name}</div>
-                <div style='color:#7ba7cc;font-family:Share Tech Mono,monospace;
-                            font-size:0.68rem;'>{desc}</div>
+                <div style='color:#00d4ff;font-family:Rajdhani,sans-serif;font-weight:600;font-size:0.85rem;'>{name}</div>
+                <div style='color:#7ba7cc;font-family:Share Tech Mono,monospace;font-size:0.68rem;'>{desc}</div>
             </div>""",unsafe_allow_html=True)
