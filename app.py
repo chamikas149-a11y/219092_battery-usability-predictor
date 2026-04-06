@@ -6,9 +6,6 @@ from plotly.subplots import make_subplots
 import pickle
 import os
 from datetime import datetime
-import base64
-from io import BytesIO
-from PIL import Image, ImageDraw
 
 st.set_page_config(
     page_title="Leaf Battery — AI Usability Predictor",
@@ -16,23 +13,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-
-# Create a proper logo as base64 image
-def create_logo_base64():
-    img = Image.new('RGBA', (200, 200), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    
-    points = [(100, 20), (140, 60), (160, 100), (150, 140), 
-              (100, 160), (50, 140), (40, 100), (60, 60)]
-    draw.polygon(points, fill=(0, 212, 255, 200))
-    
-    draw.rectangle([70, 80, 130, 120], outline=(0, 255, 157, 255), width=3)
-    draw.rectangle([85, 70, 115, 80], fill=(0, 255, 157, 255))
-    
-    buffered = BytesIO()
-    img.save(buffered, format="PNG")
-    img_str = base64.b64encode(buffered.getvalue()).decode()
-    return f"data:image/png;base64,{img_str}"
 
 st.markdown("""
 <style>
@@ -47,20 +27,19 @@ st.markdown("""
     [data-testid="stSidebar"]{display:none;}
     .block-container{padding:1rem 2rem;}
 
+    /* Top Nav Bar */
     .topbar{background:linear-gradient(90deg,#060e1c,#0a1628,#060e1c);
             border-bottom:1px solid var(--border);
             padding:0.8rem 2rem;margin:-1rem -2rem 1.5rem -2rem;
             display:flex;align-items:center;justify-content:space-between;}
     .topbar-logo{display:flex;align-items:center;gap:0.8rem;}
-    .logo-icon{width:48px;height:48px;background:linear-gradient(135deg,#00d4ff,#00ff9d);
-               border-radius:12px;display:flex;align-items:center;justify-content:center;
-               font-size:1.5rem;box-shadow:0 0 20px rgba(0,212,255,0.4);
-               transition:transform 0.3s ease;}
-    .logo-icon:hover{transform:scale(1.05);}
-    .logo-text{font-family:Rajdhani,sans-serif;font-size:1.5rem;font-weight:700;
+    .logo-icon{width:42px;height:42px;background:linear-gradient(135deg,#00d4ff,#00ff9d);
+               border-radius:50%;display:flex;align-items:center;justify-content:center;
+               font-size:1.3rem;box-shadow:0 0 15px rgba(0,212,255,0.4);}
+    .logo-text{font-family:Rajdhani,sans-serif;font-size:1.4rem;font-weight:700;
                color:var(--cyan);letter-spacing:2px;}
-    .logo-sub{font-family:Share Tech Mono,monospace;font-size:0.7rem;
-              color:var(--muted);letter-spacing:2px;margin-top:-2px;}
+    .logo-sub{font-family:Share Tech Mono,monospace;font-size:0.65rem;
+              color:var(--muted);letter-spacing:1px;margin-top:-2px;}
     .topbar-info{font-family:Share Tech Mono,monospace;font-size:0.72rem;
                  color:var(--muted);text-align:right;line-height:1.6;}
 
@@ -130,31 +109,11 @@ st.markdown("""
         color:var(--text)!important;font-family:Share Tech Mono,monospace!important;
         font-size:1.1rem!important;border-radius:8px!important;text-align:center!important;}
     p,li{color:var(--text)!important;}
-    h1,h2,h3,h4{color:var(--cyan)!important;font-family:Rajdhani,sans-serif!important;}
+    h1,h2,h3{color:var(--cyan)!important;font-family:Rajdhani,sans-serif!important;}
     label{color:var(--muted)!important;font-family:Share Tech Mono,monospace!important;
           font-size:0.78rem!important;letter-spacing:1px!important;}
     div[data-testid="stNumberInput"] label{font-size:0.9rem!important;
         font-family:Rajdhani,sans-serif!important;color:var(--text)!important;}
-    
-    .analysis-card{background:var(--card2);border:1px solid var(--border);
-                   border-radius:10px;padding:1.2rem;margin:0.8rem 0;}
-    .analysis-card h4{margin-top:0;margin-bottom:0.8rem;color:var(--cyan);}
-    .analysis-card ul{margin:0;padding-left:1.2rem;}
-    .analysis-card li{margin:0.3rem 0;}
-    .analysis-card p{margin:0.5rem 0;}
-    .trend-up{color:var(--green);}
-    .trend-down{color:var(--red);}
-    .trend-stable{color:var(--orange);}
-    
-    .about-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:1.2rem;margin-top:1rem;}
-    .about-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.2rem;
-                transition:transform 0.2s ease,box-shadow 0.2s ease;}
-    .about-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,212,255,0.1);}
-    .about-card h4{border-left:3px solid var(--cyan);padding-left:0.8rem;margin-top:0;margin-bottom:1rem;}
-    .about-card ul{list-style-type:none;padding-left:0;}
-    .about-card li{padding:0.3rem 0;border-bottom:1px solid rgba(0,212,255,0.1);}
-    .about-card li:last-child{border-bottom:none;}
-    .about-card strong{color:var(--green);}
 </style>
 """, unsafe_allow_html=True)
 
@@ -213,9 +172,11 @@ def make_gauge(soh, color):
     return fig
 
 def make_input_viz(voltage, current, temperature, soh_est):
+    # Real-time visualization of inputs
     fig = make_subplots(rows=1, cols=3,
         subplot_titles=["Voltage (V)", "Current (A)", "Temperature (°C)"])
 
+    # Voltage gauge bar
     v_pct = (voltage - V_MIN) / (V_MAX - V_MIN) * 100
     fig.add_trace(go.Bar(
         x=['Voltage'], y=[voltage],
@@ -226,6 +187,7 @@ def make_input_viz(voltage, current, temperature, soh_est):
     fig.update_yaxes(range=[5.5,8.5], row=1, col=1,
         gridcolor='#1a3a5c',linecolor='#1a3a5c')
 
+    # Current bar
     curr_color = '#00ff9d' if current >= 0 else '#ff6b35'
     fig.add_trace(go.Bar(
         x=['Current'], y=[current],
@@ -236,6 +198,7 @@ def make_input_viz(voltage, current, temperature, soh_est):
     fig.update_yaxes(range=[-6,6], row=1, col=2,
         gridcolor='#1a3a5c',linecolor='#1a3a5c')
 
+    # Temperature
     temp_color = '#00ff9d' if temperature<=40 else '#ff6b35' if temperature<=50 else '#ff3366'
     fig.add_trace(go.Bar(
         x=['Temperature'], y=[temperature],
@@ -248,110 +211,6 @@ def make_input_viz(voltage, current, temperature, soh_est):
 
     fig.update_layout(**PLOT_BG, height=250,
         showlegend=False, margin=dict(l=10,r=10,t=30,b=10))
-    return fig
-
-def make_trend_analysis(soh, voltage, current, temperature):
-    fig = make_subplots(
-        rows=2, cols=2,
-        subplot_titles=("Voltage Degradation Trend", "Temperature Impact Analysis",
-                       "Current Behavior Pattern", "SoH Projection (Next 30 days)"),
-        specs=[[{"secondary_y": False}, {"secondary_y": False}],
-               [{"secondary_y": False}, {"secondary_y": False}]]
-    )
-    
-    days = list(range(0, 31))
-    
-    voltage_trend = [voltage * (1 - 0.002 * d) for d in days]
-    fig.add_trace(go.Scatter(
-        x=days, y=voltage_trend, mode='lines+markers',
-        name='Voltage Trend', line=dict(color='#00d4ff', width=2),
-        marker=dict(size=4)), row=1, col=1)
-    fig.update_yaxes(title_text="Voltage (V)", row=1, col=1, gridcolor='#1a3a5c')
-    fig.update_xaxes(title_text="Days", row=1, col=1, gridcolor='#1a3a5c')
-    
-    temp_impact = [temperature + 5 * np.sin(d/5) for d in days]
-    safe_threshold = [40] * len(days)
-    fig.add_trace(go.Scatter(x=days, y=temp_impact, mode='lines',
-        name='Temperature', line=dict(color='#ff6b35', width=2)), row=1, col=2)
-    fig.add_trace(go.Scatter(x=days, y=safe_threshold, mode='lines',
-        name='Safe Limit', line=dict(color='#00ff9d', width=2, dash='dash')), row=1, col=2)
-    fig.update_yaxes(title_text="Temperature (°C)", row=1, col=2, gridcolor='#1a3a5c')
-    fig.update_xaxes(title_text="Days", row=1, col=2, gridcolor='#1a3a5c')
-    
-    current_pattern = [current * (0.95 ** d) if current > 0 else current * (0.98 ** d) 
-                       for d in days]
-    fig.add_trace(go.Scatter(x=days, y=current_pattern, mode='lines',
-        name='Current', line=dict(color='#00ff9d', width=2),
-        fill='tozeroy'), row=2, col=1)
-    fig.update_yaxes(title_text="Current (A)", row=2, col=1, gridcolor='#1a3a5c')
-    fig.update_xaxes(title_text="Days", row=2, col=1, gridcolor='#1a3a5c')
-    
-    soh_projection = [soh * (1 - 0.008 * d) for d in days]
-    soh_projection = [max(0, s) for s in soh_projection]
-    threshold_70 = [70] * len(days)
-    threshold_40 = [40] * len(days)
-    
-    fig.add_trace(go.Scatter(x=days, y=soh_projection, mode='lines',
-        name='SoH Projection', line=dict(color='#00d4ff', width=3)), row=2, col=2)
-    fig.add_trace(go.Scatter(x=days, y=threshold_70, mode='lines',
-        name='Good Threshold (70%)', line=dict(color='#00ff9d', width=2, dash='dash')), row=2, col=2)
-    fig.add_trace(go.Scatter(x=days, y=threshold_40, mode='lines',
-        name='Critical (40%)', line=dict(color='#ff3366', width=2, dash='dash')), row=2, col=2)
-    
-    fig.update_yaxes(title_text="State of Health (%)", row=2, col=2, gridcolor='#1a3a5c')
-    fig.update_xaxes(title_text="Days", row=2, col=2, gridcolor='#1a3a5c')
-    
-    fig.update_layout(**PLOT_BG, height=600, showlegend=True,
-                     hovermode='x unified')
-    
-    return fig
-
-def make_health_gauge_detailed(soh, voltage, temperature):
-    fig = make_subplots(
-        rows=1, cols=3,
-        subplot_titles=["Overall SoH", "Voltage Health", "Thermal Health"],
-        specs=[[{"type": "indicator"}, {"type": "indicator"}, {"type": "indicator"}]]
-    )
-    
-    fig.add_trace(go.Indicator(
-        mode="gauge+number+delta",
-        value=soh,
-        title={'text': "Battery Health", 'font': {'size': 12}},
-        delta={'reference': 70, 'increasing': {'color': "#00ff9d"},
-               'decreasing': {'color': "#ff3366"}},
-        gauge={'axis': {'range': [0, 100]},
-               'bar': {'color': "#00d4ff"},
-               'steps': [
-                   {'range': [0, 40], 'color': "rgba(255,51,102,0.3)"},
-                   {'range': [40, 70], 'color': "rgba(255,107,53,0.3)"},
-                   {'range': [70, 100], 'color': "rgba(0,255,157,0.3)"}]}), row=1, col=1)
-    
-    v_health = ((voltage - V_MIN) / (V_MAX - V_MIN)) * 100
-    fig.add_trace(go.Indicator(
-        mode="gauge+number",
-        value=v_health,
-        title={'text': "Voltage", 'font': {'size': 12}},
-        gauge={'axis': {'range': [0, 100]},
-               'bar': {'color': "#00ff9d" if v_health >= 70 else "#ff6b35"},
-               'steps': [
-                   {'range': [0, 40], 'color': "rgba(255,51,102,0.3)"},
-                   {'range': [40, 70], 'color': "rgba(255,107,53,0.3)"},
-                   {'range': [70, 100], 'color': "rgba(0,255,157,0.3)"}]}), row=1, col=2)
-    
-    t_health = max(0, 100 - (temperature - 25) * 2.5) if temperature > 25 else 100
-    t_health = min(100, t_health)
-    fig.add_trace(go.Indicator(
-        mode="gauge+number",
-        value=t_health,
-        title={'text': "Thermal", 'font': {'size': 12}},
-        gauge={'axis': {'range': [0, 100]},
-               'bar': {'color': "#00ff9d" if t_health >= 70 else "#ff6b35"},
-               'steps': [
-                   {'range': [0, 40], 'color': "rgba(255,51,102,0.3)"},
-                   {'range': [40, 70], 'color': "rgba(255,107,53,0.3)"},
-                   {'range': [70, 100], 'color': "rgba(0,255,157,0.3)"}]}), row=1, col=3)
-    
-    fig.update_layout(**PLOT_BG, height=280, margin=dict(l=20, r=20, t=50, b=20))
     return fig
 
 def get_recommendations(usability, soh, voltage, temperature, current):
@@ -386,7 +245,7 @@ def get_recommendations(usability, soh, voltage, temperature, current):
     return recs[usability]
 
 def generate_report(voltage, current, power, temperature, soh,
-                     usability, probs, recs):
+                     usability, probs, recs, gauge_img=None):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     color_map = {'Good':'#00aa66','Fair':'#dd6600','Poor':'#cc0033'}
     color = color_map[usability]
@@ -399,6 +258,7 @@ def generate_report(voltage, current, power, temperature, soh,
         bc = {'green':'#00aa66','orange':'#dd6600','red':'#cc0033'}[clr]
         rec_html += f'<div style="background:{bg};border-left:4px solid {bc};padding:10px 15px;margin:6px 0;border-radius:4px;font-size:13px;">{icon} {txt}</div>'
 
+    # Probability bars
     prob_html = ""
     for cls_name, prob, clr in zip(CLASS_NAMES, probs,
                                      ['#cc0033','#dd6600','#00aa66']):
@@ -422,12 +282,12 @@ def generate_report(voltage, current, power, temperature, soh,
 <style>
     *{{box-sizing:border-box;margin:0;padding:0;}}
     body{{font-family:'Segoe UI',Arial,sans-serif;background:#f0f4f8;color:#333;}}
-    .page{{max-width:1000px;margin:0 auto;background:white;}}
+    .page{{max-width:800px;margin:0 auto;background:white;}}
     .header{{background:linear-gradient(135deg,#0a1628 0%,#1a3a5c 100%);
              padding:30px 40px;}}
     .header-top{{display:flex;align-items:center;gap:15px;margin-bottom:15px;}}
     .logo{{width:50px;height:50px;background:linear-gradient(135deg,#00d4ff,#00ff9d);
-           border-radius:12px;display:flex;align-items:center;justify-content:center;
+           border-radius:50%;display:flex;align-items:center;justify-content:center;
            font-size:1.5rem;}}
     .header-title{{color:#00d4ff;font-size:24px;font-weight:bold;letter-spacing:2px;}}
     .header-sub{{color:#7ba7cc;font-size:12px;letter-spacing:1px;margin-top:3px;}}
@@ -600,7 +460,7 @@ def generate_report(voltage, current, power, temperature, soh,
         <strong style="color:#00d4ff;">🍃 LEAF BATTERY — AI-Enabled Battery Usability Prediction System</strong><br>
         Researcher: R.M.C.S.L Jayathilaka | Index No: 219092<br>
         <span class="university">Wayamba University of Sri Lanka</span> | 
-        Faculty of Technology | BSc (Hons) Electrotechnology<br>
+        Faculty of Technology | BSc (Hons) Information Technology<br>
         Research: LSTM-Based Prediction of Reconditioned Second-Life Li-ion Battery Modules<br>
         <em style="color:#4a7a9b;">This report is generated by an AI prediction system. 
         Results should be verified by a qualified battery technician.</em>
@@ -614,11 +474,11 @@ def generate_report(voltage, current, power, temperature, soh,
 
 lstm_reg, lstm_cls, scaler, loaded = load_models()
 
-# TOP NAV BAR
+# ── TOP NAV BAR ────────────────────────────────────────────
 st.markdown(f"""
 <div class="topbar">
     <div class="topbar-logo">
-        <div class="logo-icon">🍃⚡</div>
+        <div class="logo-icon">🍃</div>
         <div>
             <div class="logo-text">LEAF BATTERY</div>
             <div class="logo-sub">AI-ENABLED USABILITY PREDICTOR</div>
@@ -627,14 +487,13 @@ st.markdown(f"""
     <div class="topbar-info">
         <div>219092 | R.M.C.S.L Jayathilaka</div>
         <div>Wayamba University of Sri Lanka</div>
-        <div>BSc (Hons) Electrotechnology</div>
         <div style="color:{"#00ff9d" if loaded else "#ff3366"};">
             {"● Model LOADED" if loaded else "● Model NOT LOADED"}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# HERO
+# ── HERO ───────────────────────────────────────────────────
 st.markdown("""
 <div class="hero">
     <div class="hero-left">
@@ -650,15 +509,18 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# TABS
+# ── TABS ───────────────────────────────────────────────────
 tab1,tab2,tab3,tab4 = st.tabs([
     "🔮 LIVE PREDICTION",
     "📊 MODEL PERFORMANCE",
-    "📈 TREND ANALYSIS",
+    "🔍 DATA ANALYSIS",
     "ℹ️ ABOUT"])
 
+# ══════════════════════════════════════════════════════════
 # TAB 1: LIVE PREDICTION
+# ══════════════════════════════════════════════════════════
 with tab1:
+    # Metrics row
     cols = st.columns(6)
     for col,(val,lbl,clr) in zip(cols,[
         ("94.73%","R² SCORE","c"),("1.31%","MAE","g"),("4.02%","RMSE","o"),
@@ -675,6 +537,7 @@ with tab1:
         Power & State are <strong>auto-calculated</strong> — simple & accurate!
     </div>""", unsafe_allow_html=True)
 
+    # Number inputs (type කරන්න)
     c1,c2,c3 = st.columns(3)
     with c1:
         st.markdown("""<div style='text-align:center;font-family:Rajdhani;
@@ -684,6 +547,7 @@ with tab1:
         voltage = st.number_input("Voltage",min_value=6.0,max_value=8.2,
                                    value=7.40,step=0.01,format="%.2f",
                                    label_visibility="collapsed")
+        # Visual bar
         v_pct = (voltage-V_MIN)/(V_MAX-V_MIN)*100
         v_color = "#00ff9d" if voltage>=7.0 else "#ff6b35" if voltage>=6.5 else "#ff3366"
         st.markdown(f"""
@@ -728,7 +592,8 @@ with tab1:
             {temp_status} | {temperature:.1f}°C
         </div>""", unsafe_allow_html=True)
 
-    power = round(voltage * current, 3)
+    # Auto values
+    power     = round(voltage * current, 3)
     state_enc = 1 if current >= 0 else 0
     state_str = "CHARGING" if current >= 0 else "DISCHARGING"
 
@@ -739,11 +604,13 @@ with tab1:
         <strong style='color:#7ba7cc;'>Voltage SoH ≈ {((voltage-V_MIN)/(V_MAX-V_MIN)*100):.1f}%</strong>
     </div>""", unsafe_allow_html=True)
 
+    # Input visualization
     st.markdown("<div class='sec'>◈ INPUT VISUALIZATION</div>",unsafe_allow_html=True)
     st.plotly_chart(make_input_viz(voltage, current, temperature,
                     (voltage-V_MIN)/(V_MAX-V_MIN)*100),
                     use_container_width=True)
 
+    # Predict button
     if st.button("🔮 PREDICT BATTERY CONDITION NOW"):
         if not loaded:
             st.error("⚠️ Models not loaded! Please refresh the page.")
@@ -767,226 +634,278 @@ with tab1:
                 st.markdown(f"""
                 <div class='pred-box {css}' style='margin-top:0.5rem;'>
                     <div class='ptitle'>USABILITY STATUS</div>
-                    <div style='font-size:3.5rem;margin:0.2rem 0;'>{emoji}</div>
-                    <div class='pval' style='color:{color};'>{usability.upper()}</div>
-                    <div class='psub'>{'✔ Suitable for Solar Storage' if usability=='Good' 
-                                     else '⚠️ Monitor Performance' if usability=='Fair'
-                                     else '✖ Immediate Replacement Required'}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                    <div style='font-size:3.5rem;margin:0.3rem 0;'>{emoji}</div>
+                    <div style='color:{color};font-family:Rajdhani,sans-serif;
+                                font-size:1.8rem;font-weight:700;letter-spacing:3px;'>{usability.upper()}</div>
+                    <div class='psub' style='margin-top:0.5rem;font-size:0.85rem;'>
+                        {"✔ Excellent — Safe for solar energy storage" if usability=="Good"
+                         else "⚡ Moderate degradation — Monitor closely" if usability=="Fair"
+                         else "✖ Critical — Replace battery immediately!"}
+                    </div>
+                </div>""", unsafe_allow_html=True)
 
-            st.markdown("<div class='sec'>◈ DETAILED HEALTH GAUGES</div>",unsafe_allow_html=True)
-            st.plotly_chart(make_health_gauge_detailed(soh, voltage, temperature),
-                          use_container_width=True)
+                # Prob chart
+                fig_p = go.Figure()
+                for i,(cls_n,prob) in enumerate(zip(CLASS_NAMES,probs)):
+                    fig_p.add_trace(go.Bar(
+                        x=[prob*100],y=[cls_n],orientation='h',
+                        marker_color=['#ff3366','#ff6b35','#00ff9d'][i],opacity=0.85,
+                        text=f"{prob*100:.1f}%",textposition='inside',
+                        textfont=dict(size=13,family='Rajdhani',color='white')))
+                fig_p.update_layout(**PLOT_BG,height=170,showlegend=False,
+                    xaxis=dict(range=[0,100],gridcolor='#1a3a5c',
+                               linecolor='#1a3a5c',ticksuffix='%'),
+                    margin=dict(l=5,r=5,t=5,b=5))
+                st.plotly_chart(fig_p,use_container_width=True)
 
-            st.markdown("<div class='sec'>◈ TREND ANALYSIS & PROJECTIONS</div>",unsafe_allow_html=True)
-            st.plotly_chart(make_trend_analysis(soh, voltage, current, temperature),
-                          use_container_width=True)
-
-            st.markdown("<div class='sec'>📋 RECOMMENDATIONS</div>",unsafe_allow_html=True)
-            for icon,text,clr in recs:
+            # Recommendations
+            st.markdown("<div class='sec'>◈ RECOMMENDATIONS</div>",unsafe_allow_html=True)
+            bc = {'Good':'#00ff9d','Fair':'#ff6b35','Poor':'#ff3366'}[usability]
+            bg = {'Good':'rgba(0,255,157,0.05)','Fair':'rgba(255,107,53,0.05)',
+                  'Poor':'rgba(255,51,102,0.05)'}[usability]
+            for icon,txt,clr in recs:
                 st.markdown(f"""
-                <div class='rec-card' style='border-left:4px solid {clr};background:rgba(0,0,0,0.2);'>
-                    {icon} {text}
-                </div>
-                """, unsafe_allow_html=True)
+                <div class='rec-card' style='background:{bg};border-color:{bc};color:var(--text);'>
+                    {icon} {txt}
+                </div>""", unsafe_allow_html=True)
 
-            report = generate_report(voltage, current, power, temperature, soh,
-                                    usability, probs, recs)
+            # Download Report
+            st.markdown("<div class='sec'>◈ DOWNLOAD REPORT</div>",unsafe_allow_html=True)
+            report = generate_report(voltage,current,power,temperature,
+                                      soh,usability,probs,recs)
+            fname  = f"LeafBattery_Report_{usability}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
             st.download_button(
-                label="📥 DOWNLOAD COMPLETE REPORT (HTML)",
-                data=report,
-                file_name=f"leaf_battery_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
-                mime="text/html"
-            )
+                label="📄 DOWNLOAD BATTERY ANALYSIS REPORT",
+                data=report, file_name=fname, mime="text/html",
+                use_container_width=True)
+            st.markdown("""<div class='icard'>
+                💡 <strong>How to save as PDF:</strong>
+                Open the downloaded HTML file → Press <strong>Ctrl+P</strong> →
+                Select <strong>"Save as PDF"</strong> → Save
+            </div>""", unsafe_allow_html=True)
 
+# ══════════════════════════════════════════════════════════
 # TAB 2: MODEL PERFORMANCE
+# ══════════════════════════════════════════════════════════
 with tab2:
-    st.markdown("<div class='sec'>◈ MODEL ARCHITECTURE</div>",unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("""
-        <div class='analysis-card'>
-            <h4>🏗️ LSTM Network Structure</h4>
-            <ul>
-                <li>Input Layer: 30 timesteps × 6 features</li>
-                <li>LSTM Layer 1: 128 units (return sequences=True)</li>
-                <li>Dropout: 0.2</li>
-                <li>LSTM Layer 2: 64 units (return sequences=True)</li>
-                <li>Dropout: 0.2</li>
-                <li>LSTM Layer 3: 32 units</li>
-                <li>Dropout: 0.2</li>
-                <li>Dense Layer: 16 units (ReLU)</li>
-                <li>Output Layer 1: Regression (SoH) - Huber Loss</li>
-                <li>Output Layer 2: Classification (3 classes) - Softmax</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class='analysis-card'>
-            <h4>📊 Training Configuration</h4>
-            <ul>
-                <li>Total Parameters: 245,891</li>
-                <li>Training Samples: 77,341</li>
-                <li>Validation Split: 20%</li>
-                <li>Batch Size: 32</li>
-                <li>Epochs: 100 (Early Stopping)</li>
-                <li>Optimizer: Adam (lr=0.001)</li>
-                <li>Loss Functions: Huber + Categorical Crossentropy</li>
-                <li>Metrics: MAE, R², Accuracy, Precision, Recall, F1</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("<div class='sec'>◈ PERFORMANCE METRICS</div>",unsafe_allow_html=True)
-    
-    metrics_data = {
-        'Metrics': ['R² Score', 'MAE (%)', 'RMSE (%)', 'Accuracy', 'Precision', 'Recall', 'F1-Score'],
-        'Value': [94.73, 1.31, 4.02, 97.78, 97.79, 97.77, 97.78]
-    }
-    df_metrics = pd.DataFrame(metrics_data)
-    
-    fig_perf = go.Figure()
-    fig_perf.add_trace(go.Bar(
-        x=df_metrics['Metrics'], y=df_metrics['Value'],
-        marker_color=['#00d4ff', '#00ff9d', '#ff6b35', '#00d4ff', '#00ff9d', '#ff6b35', '#00d4ff'],
-        text=df_metrics['Value'], textposition='outside',
-        textfont=dict(size=12, color='white')
-    ))
-    fig_perf.update_layout(
-        **PLOT_BG,
-        title="Model Performance Metrics",
-        xaxis_title="Metric",
-        yaxis_title="Value (%)",
-        height=400,
-        showlegend=False
-    )
-    st.plotly_chart(fig_perf, use_container_width=True)
+    c1,c2 = st.columns(2)
+    with c1:
+        st.markdown("**🎯 REGRESSION — SoH Prediction**")
+        st.dataframe(pd.DataFrame({
+            'Metric':['R² Score','MAE','RMSE','MAPE'],
+            'Value':['94.73%','1.3105%','4.0165%','2.5312%'],
+            'Status':['✅ Excellent','✅ Very Low','✅ Good','✅ Very Low']}),
+            use_container_width=True,hide_index=True)
+    with c2:
+        st.markdown("**🎯 CLASSIFICATION — Usability**")
+        st.dataframe(pd.DataFrame({
+            'Metric':['Accuracy','Precision','Recall','F1-Score'],
+            'Value':['97.78%','97.79%','97.78%','97.78%'],
+            'Status':['✅']*4}),
+            use_container_width=True,hide_index=True)
 
-# TAB 3: TREND ANALYSIS
+    st.markdown("<div class='sec'>◈ PER-CLASS METRICS</div>",unsafe_allow_html=True)
+    fig2 = go.Figure()
+    for vals,name,color in [
+        ([97.94,85.71,98.87],'Precision','#00d4ff'),
+        ([94.35,86.97,99.20],'Recall','#00ff9d'),
+        ([96.11,86.34,99.03],'F1-Score','#ff6b35')]:
+        fig2.add_trace(go.Bar(name=name,x=CLASS_NAMES,y=vals,
+            marker_color=color,opacity=0.85,
+            text=[f"{v:.1f}%" for v in vals],textposition='outside',
+            textfont=dict(size=10,family='Share Tech Mono')))
+    fig2.update_layout(**PLOT_BG,barmode='group',height=300,
+        yaxis=dict(range=[0,115],gridcolor='#1a3a5c',linecolor='#1a3a5c'),
+        margin=dict(l=5,r=5,t=10,b=5))
+    fig2.add_hline(y=90,line_dash='dash',line_color='#ff3366')
+    st.plotly_chart(fig2,use_container_width=True)
+
+    st.markdown("<div class='sec'>◈ CROSS-VALIDATION (5-FOLD)</div>",unsafe_allow_html=True)
+    st.dataframe(pd.DataFrame({
+        'Fold':['Fold 1','Fold 2','Fold 3','Fold 4','Fold 5','MEAN ± STD'],
+        'R²':['92.40%','97.34%','93.81%','80.66%','95.71%','91.98% ± 5.91%'],
+        'MAE':['0.6089%','1.0304%','0.7898%','1.5795%','2.5410%','1.3099% ± 0.6969%'],
+        'Accuracy':['100%','94.66%','100%','97.90%','96.31%','97.77% ± 2.08%']}),
+        use_container_width=True,hide_index=True)
+
+    st.markdown("<div class='sec'>◈ CONFUSION MATRIX</div>",unsafe_allow_html=True)
+    c1,c2 = st.columns(2)
+    cm = np.array([[1520,79,12],[19,1008,132],[13,89,12591]])
+    with c1:
+        fig_cm = go.Figure(go.Heatmap(z=cm,x=CLASS_NAMES,y=CLASS_NAMES,
+            colorscale='Blues',text=cm,texttemplate='%{text}',
+            textfont=dict(size=13,family='Rajdhani')))
+        fig_cm.update_layout(**PLOT_BG,title='Counts',height=300,
+            xaxis_title='Predicted',yaxis_title='Actual',
+            margin=dict(l=5,r=5,t=40,b=5))
+        st.plotly_chart(fig_cm,use_container_width=True)
+    with c2:
+        cm_n = cm.astype(float)/cm.sum(axis=1)[:,np.newaxis]*100
+        fig_cn = go.Figure(go.Heatmap(z=cm_n,x=CLASS_NAMES,y=CLASS_NAMES,
+            colorscale='Greens',text=np.round(cm_n,1),
+            texttemplate='%{text}%',textfont=dict(size=13,family='Rajdhani'),
+            zmin=0,zmax=100))
+        fig_cn.update_layout(**PLOT_BG,title='Normalized %',height=300,
+            xaxis_title='Predicted',yaxis_title='Actual',
+            margin=dict(l=5,r=5,t=40,b=5))
+        st.plotly_chart(fig_cn,use_container_width=True)
+
+    st.markdown("<div class='sec'>◈ OVERFITTING ANALYSIS</div>",unsafe_allow_html=True)
+    c1,c2 = st.columns(2)
+    with c1:
+        fig_o = go.Figure(go.Bar(x=['Train R²','Test R²'],y=[90.56,94.73],
+            marker_color=['#3498db','#00ff9d'],
+            text=['90.56%','94.73%'],textposition='outside',
+            textfont=dict(size=12,family='Rajdhani')))
+        fig_o.add_hline(y=90,line_dash='dash',line_color='#ff3366')
+        fig_o.update_layout(**PLOT_BG,title='R² — No Overfitting ✅',height=270,
+            yaxis=dict(range=[0,110],gridcolor='#1a3a5c',linecolor='#1a3a5c'),
+            margin=dict(l=5,r=5,t=40,b=5))
+        st.plotly_chart(fig_o,use_container_width=True)
+    with c2:
+        fig_o2 = go.Figure(go.Bar(x=['Train Acc','Test Acc'],y=[98.08,97.78],
+            marker_color=['#3498db','#00ff9d'],
+            text=['98.08%','97.78%'],textposition='outside',
+            textfont=dict(size=12,family='Rajdhani')))
+        fig_o2.add_hline(y=90,line_dash='dash',line_color='#ff3366')
+        fig_o2.update_layout(**PLOT_BG,title='Accuracy — Gap=0.30% ✅',height=270,
+            yaxis=dict(range=[0,110],gridcolor='#1a3a5c',linecolor='#1a3a5c'),
+            margin=dict(l=5,r=5,t=40,b=5))
+        st.plotly_chart(fig_o2,use_container_width=True)
+
+    st.markdown("<div class='sec'>◈ FEATURE IMPORTANCE</div>",unsafe_allow_html=True)
+    fi_v = [10.8637,0.1162,0.0118,-0.0074,-0.0158,-0.0448]
+    fi_f = ['Voltage','Power','Temperature','CycleCount','State','Current']
+    fig_fi = go.Figure(go.Bar(x=fi_v,y=fi_f,orientation='h',
+        marker_color=['#ff3366' if v==max(fi_v) else '#00d4ff' for v in fi_v],
+        opacity=0.85,text=[f'{v:.4f}' for v in fi_v],textposition='outside',
+        textfont=dict(family='Share Tech Mono',size=10)))
+    fig_fi.update_layout(**PLOT_BG,height=280,xaxis_title='Importance',
+        margin=dict(l=5,r=5,t=10,b=5))
+    st.plotly_chart(fig_fi,use_container_width=True)
+
+# ══════════════════════════════════════════════════════════
+# TAB 3: DATA ANALYSIS
+# ══════════════════════════════════════════════════════════
 with tab3:
-    st.markdown("<div class='sec'>◈ INTERACTIVE TREND ANALYSIS</div>",unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class='icard'>
-        📊 This section provides detailed trend analysis of battery performance over time.
-        Use the controls below to simulate different operating conditions and see how they affect battery health.
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        sim_voltage = st.slider("Simulated Voltage (V)", 6.0, 8.2, 7.4, 0.05)
-    with col2:
-        sim_current = st.slider("Simulated Current (A)", -5.0, 5.0, 1.2, 0.1)
-    with col3:
-        sim_temp = st.slider("Simulated Temperature (°C)", 20.0, 60.0, 35.0, 1.0)
-    
-    sim_power = sim_voltage * sim_current
-    sim_state = 1 if sim_current >= 0 else 0
-    
-    sim_soh = ((sim_voltage - V_MIN) / (V_MAX - V_MIN)) * 100
-    sim_soh = max(0, min(100, sim_soh - max(0, (sim_temp - 35) * 1.5)))
-    
-    st.plotly_chart(make_trend_analysis(sim_soh, sim_voltage, sim_current, sim_temp),
-                   use_container_width=True)
-    
-    st.markdown("<div class='sec'>◈ ANALYSIS INSIGHTS</div>",unsafe_allow_html=True)
-    
-    insight_cols = st.columns(3)
-    with insight_cols[0]:
-        degradation_rate = (100 - sim_soh) / 30
-        st.markdown(f"""
-        <div class='analysis-card'>
-            <h4>📉 Degradation Rate</h4>
-            <p style='font-size:24px;color:#00d4ff;'>{degradation_rate:.2f}%/day</p>
-            <p>Projected daily degradation based on current parameters</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with insight_cols[1]:
-        remaining_life_days = sim_soh / degradation_rate if degradation_rate > 0 else 365
-        st.markdown(f"""
-        <div class='analysis-card'>
-            <h4>⏰ Estimated Remaining Life</h4>
-            <p style='font-size:24px;color:#00ff9d;'>{remaining_life_days:.0f} days</p>
-            <p>Until reaching 0% State of Health</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with insight_cols[2]:
-        optimal = "✅ Optimal" if 7.0 <= sim_voltage <= 8.2 and sim_temp <= 40 else "⚠️ Suboptimal"
-        st.markdown(f"""
-        <div class='analysis-card'>
-            <h4>🎯 Operating Status</h4>
-            <p style='font-size:24px;color:{ "#00ff9d" if optimal=="✅ Optimal" else "#ff6b35" };'>{optimal}</p>
-            <p>Voltage: {sim_voltage:.2f}V | Temp: {sim_temp:.1f}°C</p>
-        </div>
-        """, unsafe_allow_html=True)
+    cols = st.columns(4)
+    for col,(val,lbl,clr) in zip(cols,[
+        ("77,341","TOTAL SAMPLES","c"),("11","CYCLES","g"),
+        ("6","FEATURES","o"),("3","CLASSES","r")]):
+        with col:
+            st.markdown(f"<div class='mcard {clr}'><div class='mval {clr}'>{val}</div>"
+                        f"<div class='mlbl'>{lbl}</div></div>",unsafe_allow_html=True)
+    st.markdown("<br>",unsafe_allow_html=True)
+    st.markdown("<div class='sec'>◈ PREPROCESSING SUMMARY</div>",unsafe_allow_html=True)
+    st.dataframe(pd.DataFrame({
+        'Step':['Raw Data','Remove Noise','Non-Solar Filter','Voltage Filter','Final'],
+        'Rows':[79863,79383,78688,77341,77341],
+        'Removed':['—','480','695','1347','—'],
+        'Status':['📥 Loaded','🧹 Cleaned','🔍 Filtered','⚡ Applied','✅ Ready']}),
+        use_container_width=True,hide_index=True)
+    c1,c2 = st.columns(2)
+    with c1:
+        st.markdown("<div class='sec'>◈ VOLTAGE DISTRIBUTION</div>",unsafe_allow_html=True)
+        np.random.seed(42)
+        v_sim = np.clip(np.concatenate([
+            np.random.normal(7.8,0.15,46760),
+            np.random.normal(7.2,0.2,17660),
+            np.random.normal(6.4,0.2,12921)]),6.0,8.2)
+        fig_v = go.Figure(go.Histogram(x=v_sim,nbinsx=60,
+            marker_color='#00d4ff',opacity=0.75,
+            marker_line=dict(color='#050d1a',width=0.5)))
+        fig_v.add_vline(x=v_sim.mean(),line_dash='dash',line_color='#ff6b35',
+            annotation_text=f'Mean:{v_sim.mean():.2f}V')
+        fig_v.update_layout(**PLOT_BG,title='Voltage Distribution',
+            height=270,xaxis_title='Voltage (V)',yaxis_title='Count',
+            margin=dict(l=5,r=5,t=40,b=5))
+        st.plotly_chart(fig_v,use_container_width=True)
+    with c2:
+        st.markdown("<div class='sec'>◈ FEATURE CORRELATION</div>",unsafe_allow_html=True)
+        corr_v = [1.000,0.164,0.123,-0.454,-0.462,-0.490]
+        corr_f = ['Voltage','CycleCount','Temperature','Power','State','Current']
+        fig_c = go.Figure(go.Bar(x=corr_v,y=corr_f,orientation='h',
+            marker_color=['#00ff9d' if v>0 else '#ff3366' for v in corr_v],
+            opacity=0.85,text=[f'{v:.3f}' for v in corr_v],textposition='outside',
+            textfont=dict(family='Share Tech Mono',size=10)))
+        fig_c.add_vline(x=0,line_color='#7ba7cc',line_width=1)
+        fig_c.update_layout(**PLOT_BG,title='Correlation with SoH',
+            height=270,xaxis=dict(range=[-0.6,1.2],gridcolor='#1a3a5c',linecolor='#1a3a5c'),
+            margin=dict(l=5,r=5,t=40,b=5))
+        st.plotly_chart(fig_c,use_container_width=True)
 
+# ══════════════════════════════════════════════════════════
 # TAB 4: ABOUT
+# ══════════════════════════════════════════════════════════
 with tab4:
-    st.markdown("<div class='sec'>◈ ABOUT LEAF BATTERY</div>", unsafe_allow_html=True)
-    
-    # Use a grid layout for better alignment
+    c1,c2 = st.columns(2)
+    with c1:
+        st.markdown("<div class='sec'>◈ RESEARCHER</div>",unsafe_allow_html=True)
+        for icon,lbl,val in [
+            ("👤","Name","R.M.C.S.L Jayathilaka"),
+            ("🔢","Index No","219092"),
+            ("🎓","Degree","BET (Hons) Electrotechnology"),
+            ("🏫","University","Wayamba University of Sri Lanka"),
+            ("🏛️","Faculty","Faculty of Technology"),
+            ("📅","Year","Final Year Research Project — 2025/2026")]:
+            st.markdown(f"<div class='icard'>{icon} <strong style='color:#7ba7cc;'>{lbl}:</strong> "
+                        f"<strong style='color:#00d4ff;'>{val}</strong></div>",unsafe_allow_html=True)
+    with c2:
+        st.markdown("<div class='sec'>◈ RESEARCH OBJECTIVES</div>",unsafe_allow_html=True)
+        for i,obj in enumerate([
+            "Analyze performance data of reconditioned second-life lithium-ion battery modules for solar energy storage",
+            "Develop an LSTM-based dual-output prediction model to forecast usability and State of Health (SoH)",
+            "Determine accuracy and reliability of the developed prediction model through rigorous validation"
+        ],1):
+            st.markdown(f"<div class='icard'><strong style='color:#00d4ff;'>{i}.</strong> {obj}</div>",
+                unsafe_allow_html=True)
+
+        st.markdown("<div class='sec'>◈ RESEARCH SUMMARY</div>",unsafe_allow_html=True)
+        for icon,lbl,txt in [
+            ("🎯","Topic","LSTM-Based Prediction of Reconditioned Second-Life Li-ion Batteries"),
+            ("📡","Data","Real-time ESP32 sensor data — 77,341 readings, 11 cycles"),
+            ("🧠","Model","Dual-output LSTM (128→64→32) — Regression + Classification"),
+            ("✅","Validation","5-fold temporal CV | No overfitting confirmed"),
+            ("🌞","Application","Solar energy storage battery usability assessment")]:
+            st.markdown(f"<div class='icard'>{icon} <strong style='color:#7ba7cc;'>{lbl}:</strong> {txt}</div>",
+                unsafe_allow_html=True)
+
+    st.markdown("<div class='sec'>◈ TECH STACK</div>",unsafe_allow_html=True)
+    techs=[("🐍","Python 3.14","Core Language"),("🧠","Keras 3.14","Deep Learning"),
+           ("📊","Scikit-learn","ML Utilities"),("🐼","Pandas / NumPy","Data Processing"),
+           ("📈","Plotly","Visualization"),("🌐","Streamlit","Web Dashboard"),
+           ("☁️","Google Colab","Model Training"),("📡","ESP32","Data Collection")]
+    tcols = st.columns(4)
+    for i,(icon,name,desc) in enumerate(techs):
+        with tcols[i%4]:
+            st.markdown(f"""<div class='mcard c' style='text-align:left;
+                    padding:0.8rem;margin-bottom:0.6rem;'>
+                <div style='font-size:1.3rem;'>{icon}</div>
+                <div style='color:#00d4ff;font-family:Rajdhani,sans-serif;
+                            font-weight:600;font-size:0.85rem;'>{name}</div>
+                <div style='color:#7ba7cc;font-family:Share Tech Mono,monospace;
+                            font-size:0.68rem;'>{desc}</div>
+            </div>""",unsafe_allow_html=True)
+
+    # University info
+    st.markdown("<div class='sec'>◈ INSTITUTION</div>",unsafe_allow_html=True)
     st.markdown("""
-    <div class='about-grid'>
-        <div class='about-card'>
-            <h4>🎓 Academic Information</h4>
-            <ul>
-                <li><strong>Degree Programme:</strong> BSc (Hons) Electrotechnology</li>
-                <li><strong>University:</strong> Wayamba University of Sri Lanka</li>
-                <li><strong>Faculty:</strong> Faculty of Technology</li>
-                <li><strong>Researcher:</strong> R.M.C.S.L Jayathilaka</li>
-                <li><strong>Index No:</strong> 219092</li>
-            </ul>
+    <div style='background:linear-gradient(135deg,#0a1628,#0d1f3c);
+                border:1px solid #1a3a5c;border-left:4px solid #00d4ff;
+                border-radius:10px;padding:1.5rem 2rem;margin:0.5rem 0;'>
+        <div style='font-family:Rajdhani,sans-serif;font-size:1.4rem;
+                    font-weight:700;color:#00d4ff;letter-spacing:1px;'>
+            🏫 Wayamba University of Sri Lanka
         </div>
-        
-        <div class='about-card'>
-            <h4>🔬 Research Overview</h4>
-            <p>This research focuses on developing an AI-based prediction system for evaluating the State of Health (SoH) and usability of reconditioned second-life Li-ion batteries. The system employs a dual-output LSTM architecture that simultaneously predicts SoH (regression) and usability class (classification).</p>
+        <div style='font-family:Share Tech Mono,monospace;font-size:0.8rem;
+                    color:#7ba7cc;margin-top:0.5rem;'>
+            Faculty of Technology | Department of Electrotechnology
         </div>
-        
-        <div class='about-card'>
-            <h4>📊 Technical Specifications</h4>
-            <ul>
-                <li><strong>Model Architecture:</strong> Dual-Output LSTM (128→64→32 units)</li>
-                <li><strong>Input Features:</strong> Voltage, Current, Power, Temperature, Cycle Count, State</li>
-                <li><strong>Dataset Size:</strong> 77,341 readings from 11 charge/discharge cycles</li>
-                <li><strong>Performance:</strong> R² Score: 94.73%, Accuracy: 97.78%</li>
-                <li><strong>Validation:</strong> 5-Fold Cross Validation with no overfitting</li>
-            </ul>
-        </div>
-        
-        <div class='about-card'>
-            <h4>🎯 Application Areas</h4>
-            <ul>
-                <li>Solar energy storage systems</li>
-                <li>Second-life battery evaluation</li>
-                <li>Predictive maintenance</li>
-                <li>Battery recycling and reconditioning industry</li>
-            </ul>
-        </div>
-        
-        <div class='about-card'>
-            <h4>📞 Contact Information</h4>
-            <p>For more information about this research, please contact:</p>
-            <p><strong>R.M.C.S.L Jayathilaka</strong><br>
-            Faculty of Technology, Wayamba University of Sri Lanka<br>
-            Email: research@leafbattery.lk | Phone: +94 XX XXX XXXX</p>
-        </div>
-        
-        <div class='about-card'>
-            <h4>🤖 Model Version</h4>
-            <ul>
-                <li><strong>Version:</strong> 2.0</li>
-                <li><strong>Release Date:</strong> January 2026</li>
-                <li><strong>Framework:</strong> TensorFlow/Keras</li>
-                <li><strong>Status:</strong> Production Ready ✅</li>
-            </ul>
+        <div style='font-family:Exo 2,sans-serif;font-size:0.9rem;
+                    color:#e8f4fd;margin-top:0.8rem;line-height:1.6;'>
+            Final Year Research Project — BET (Hons) Electroechnology<br>
+            Research Area: AI-Enabled Predictive Analytics for Sustainable Energy Storage<br>
+            <span style='color:#00ff9d;'>Index No: 219092 | R.M.C.S.L Jayathilaka</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
