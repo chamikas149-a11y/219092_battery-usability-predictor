@@ -599,7 +599,7 @@ with tab4:
         for icon,lbl,val in [
             ("👤","Name","R.M.C.S.L Jayathilaka"),
             ("🔢","Index No","219092"),
-            ("🎓","Degree","BSc (Hons) Information Technology"),
+            ("🎓","Degree","BET (Hons) Electrotechnology"),
             ("📅","Year","Final Year Research Project")]:
             st.markdown(f"<div class='icard'>{icon} <strong style='color:#7ba7cc;'>{lbl}:</strong> "
                         f"<strong style='color:#00d4ff;'>{val}</strong></div>",unsafe_allow_html=True)
