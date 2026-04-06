@@ -86,12 +86,13 @@ CLASS_NAMES = ['Poor','Fair','Good']
 CLASS_COLORS = {'Poor':'#ff3366','Fair':'#ff6b35','Good':'#00ff9d'}
 
 @st.cache_resource
+@st.cache_resource
 def load_models():
     try:
-        import tensorflow as tf
-        from tensorflow.keras.models import load_model
-        reg    = load_model('best_lstm_regression.keras')
-        cls    = load_model('best_lstm_classification.keras')
+        # Load models using keras directly
+        import keras
+        reg    = keras.models.load_model('best_lstm_regression.keras')
+        cls    = keras.models.load_model('best_lstm_classification.keras')
         with open('scaler_X.pkl', 'rb') as f:
             scaler = pickle.load(f)
         return reg, cls, scaler, True
