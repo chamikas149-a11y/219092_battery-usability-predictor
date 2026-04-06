@@ -844,7 +844,7 @@ with tab4:
         for icon,lbl,val in [
             ("👤","Name","R.M.C.S.L Jayathilaka"),
             ("🔢","Index No","219092"),
-            ("🎓","Degree","BSc (Hons) Electrotechnology"),
+            ("🎓","Degree","BET (Hons) Electrotechnology"),
             ("🏫","University","Wayamba University of Sri Lanka"),
             ("🏛️","Faculty","Faculty of Technology"),
             ("📅","Year","Final Year Research Project — 2025/2026")]:
@@ -903,7 +903,7 @@ with tab4:
         </div>
         <div style='font-family:Exo 2,sans-serif;font-size:0.9rem;
                     color:#e8f4fd;margin-top:0.8rem;line-height:1.6;'>
-            Final Year Research Project — BSc (Hons) Information Technology<br>
+            Final Year Research Project — BET (Hons) Electroechnology<br>
             Research Area: AI-Enabled Predictive Analytics for Sustainable Energy Storage<br>
             <span style='color:#00ff9d;'>Index No: 219092 | R.M.C.S.L Jayathilaka</span>
         </div>
