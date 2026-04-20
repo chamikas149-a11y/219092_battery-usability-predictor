@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pickle
 import os
+import base64
 from datetime import datetime
 
 st.set_page_config(
@@ -32,9 +33,11 @@ st.markdown("""
             padding:0.8rem 2rem;margin:-1rem -2rem 1.5rem -2rem;
             display:flex;align-items:center;justify-content:space-between;}
     .topbar-logo{display:flex;align-items:center;gap:0.8rem;}
-    .logo-icon{width:42px;height:42px;background:linear-gradient(135deg,#00d4ff,#00ff9d);
-               border-radius:50%;display:flex;align-items:center;justify-content:center;
-               font-size:1.3rem;box-shadow:0 0 15px rgba(0,212,255,0.4);}
+    .logo-icon{
+        width:50px;height:50px;
+        display:flex;align-items:center;justify-content:center;
+        box-shadow:0 0 15px rgba(0,212,255,0.25);
+    }
     .logo-text{font-family:Rajdhani,sans-serif;font-size:1.4rem;font-weight:700;
                color:var(--cyan);letter-spacing:2px;}
     .logo-sub{font-family:Share Tech Mono,monospace;font-size:0.65rem;
@@ -120,7 +123,8 @@ st.markdown("""
 PLOT_BG = dict(
     paper_bgcolor='#0a1628', plot_bgcolor='#050d1a',
     font=dict(color='#7ba7cc', family='Share Tech Mono'),
-    legend=dict(bgcolor='#0a1628', bordercolor='#1a3a5c', borderwidth=1))
+    legend=dict(bgcolor='#0a1628', bordercolor='#1a3a5c', borderwidth=1)
+)
 
 V_MIN, V_MAX = 6.0, 8.2
 SEQUENCE_LENGTH = 30
@@ -161,6 +165,14 @@ PERMUTATION_DF = pd.DataFrame({
     "Feature": ["Voltage", "Power", "Current", "State", "Temperature", "CycleCount"],
     "MAE Increase": [15.162413, 0.126543, 0.016724, 0.014314, 0.006838, -0.053349]
 })
+
+def get_base64_image(image_path):
+    if not os.path.exists(image_path):
+        return None
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
+
+logo_base64 = get_base64_image("logo.png")
 
 @st.cache_resource
 def load_models():
@@ -218,7 +230,7 @@ def make_input_viz(voltage, current, temperature, soh_est):
     fig.update_yaxes(range=[5.5, 8.5], row=1, col=1,
         gridcolor='#1a3a5c', linecolor='#1a3a5c')
 
-    curr_color = '#00ff9d' if current >= 0 else '#ff6b35'
+    curr_color = '#ff6b35' if current >= 0 else '#00ff9d'
     fig.add_trace(go.Bar(
         x=['Current'], y=[current],
         marker_color=curr_color, opacity=0.85,
@@ -363,7 +375,7 @@ def generate_report(voltage, current, power, temperature, soh,
     color_map = {'Good':'#00aa66','Fair':'#dd6600','Poor':'#cc0033'}
     color = color_map[usability]
     emoji = {'Good':'✅','Fair':'⚠️','Poor':'❌'}[usability]
-    state = "CHARGING" if current >= 0 else "DISCHARGING"
+    state = "DISCHARGING" if current >= 0 else "CHARGING"
 
     rec_html = ""
     for icon, txt, clr in recs:
@@ -372,8 +384,7 @@ def generate_report(voltage, current, power, temperature, soh,
         rec_html += f'<div style="background:{bg};border-left:4px solid {bc};padding:10px 15px;margin:6px 0;border-radius:4px;font-size:13px;">{icon} {txt}</div>'
 
     prob_html = ""
-    for cls_name, prob, clr in zip(CLASS_NAMES, probs,
-                                     ['#cc0033','#dd6600','#00aa66']):
+    for cls_name, prob, clr in zip(CLASS_NAMES, probs, ['#cc0033','#dd6600','#00aa66']):
         w = int(prob * 100)
         prob_html += f'''
         <div style="margin:8px 0;">
@@ -509,7 +520,7 @@ def generate_report(voltage, current, power, temperature, soh,
         <div class="param-item">
             <div class="param-label">🔌 Current</div>
             <div class="param-value">{current:.3f} A</div>
-            <div class="param-status">{"🔋 Charging mode" if current>=0 else "⚡ Discharging mode"}</div>
+            <div class="param-status">{"⚡ Discharging mode" if current>=0 else "🔋 Charging mode"}</div>
         </div>
         <div class="param-item">
             <div class="param-label">💡 Power</div>
@@ -602,10 +613,15 @@ def generate_report(voltage, current, power, temperature, soh,
 
 lstm_reg, lstm_cls, scaler, loaded = load_models()
 
+logo_html = (
+    f'<img src="data:image/png;base64,{logo_base64}" style="width:100%;height:100%;object-fit:contain;">'
+    if logo_base64 else '🍃'
+)
+
 st.markdown(f"""
 <div class="topbar">
     <div class="topbar-logo">
-        <div class="logo-icon">🍃</div>
+        <div class="logo-icon">{logo_html}</div>
         <div>
             <div class="logo-text">LEAF BATTERY</div>
             <div class="logo-sub">AI-ENABLED USABILITY PREDICTOR</div>
@@ -643,9 +659,6 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "ℹ️ ABOUT"
 ])
 
-# ══════════════════════════════════════════════════════════
-# TAB 1: LIVE PREDICTION
-# ══════════════════════════════════════════════════════════
 with tab1:
     cols = st.columns(6)
     for col, (val, lbl, clr) in zip(cols, [
@@ -657,8 +670,7 @@ with tab1:
                         f"<div class='mlbl'>{lbl}</div></div>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<div class='sec'>◈ ENTER BATTERY MEASUREMENTS</div>",
-                unsafe_allow_html=True)
+    st.markdown("<div class='sec'>◈ ENTER BATTERY MEASUREMENTS</div>", unsafe_allow_html=True)
     st.markdown("""<div class='icard'>
         📌 Enter <strong>3 measurements</strong> from your battery.
         Power & State are <strong>auto-calculated</strong> — simple & accurate!
@@ -668,8 +680,7 @@ with tab1:
     with c1:
         st.markdown("""<div style='text-align:center;font-family:Rajdhani;
                     font-size:1.1rem;color:#00d4ff;letter-spacing:1px;
-                    margin-bottom:0.5rem;'>⚡ VOLTAGE (V)</div>""",
-                    unsafe_allow_html=True)
+                    margin-bottom:0.5rem;'>⚡ VOLTAGE (V)</div>""", unsafe_allow_html=True)
         voltage = st.number_input("Voltage", min_value=6.0, max_value=8.2,
                                    value=7.40, step=0.01, format="%.2f",
                                    label_visibility="collapsed")
@@ -686,12 +697,11 @@ with tab1:
     with c2:
         st.markdown("""<div style='text-align:center;font-family:Rajdhani;
                     font-size:1.1rem;color:#00d4ff;letter-spacing:1px;
-                    margin-bottom:0.5rem;'>🔌 CURRENT (A)</div>""",
-                    unsafe_allow_html=True)
+                    margin-bottom:0.5rem;'>🔌 CURRENT (A)</div>""", unsafe_allow_html=True)
         current = st.number_input("Current", min_value=-10.0, max_value=10.0,
                                    value=1.20, step=0.01, format="%.2f",
                                    label_visibility="collapsed")
-        curr_color = "#00ff9d" if current >= 0 else "#ff6b35"
+        curr_color = "#ff6b35" if current >= 0 else "#00ff9d"
         curr_label = "⚡ DISCHARGING" if current >= 0 else "🔋 CHARGING"
         st.markdown(f"""
         <div style='text-align:center;font-family:Share Tech Mono;font-size:0.78rem;
@@ -703,8 +713,7 @@ with tab1:
     with c3:
         st.markdown("""<div style='text-align:center;font-family:Rajdhani;
                     font-size:1.1rem;color:#00d4ff;letter-spacing:1px;
-                    margin-bottom:0.5rem;'>🌡️ TEMPERATURE (°C)</div>""",
-                    unsafe_allow_html=True)
+                    margin-bottom:0.5rem;'>🌡️ TEMPERATURE (°C)</div>""", unsafe_allow_html=True)
         temperature = st.number_input("Temperature", min_value=0.0, max_value=80.0,
                                        value=35.0, step=0.1, format="%.1f",
                                        label_visibility="collapsed")
@@ -719,7 +728,7 @@ with tab1:
 
     power = round(voltage * current, 3)
     state_enc = 1 if current >= 0 else 0
-    state_str = "CHARGING" if current >= 0 else "DISCHARGING"
+    state_str = "DISCHARGING" if current >= 0 else "CHARGING"
 
     st.markdown(f"""<div class='icard' style='margin-top:1rem;'>
         🔄 Auto-calculated: &nbsp;
@@ -815,9 +824,6 @@ with tab1:
                 Select <strong>"Save as PDF"</strong> → Save
             </div>""", unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════
-# TAB 2: MODEL PERFORMANCE
-# ══════════════════════════════════════════════════════════
 with tab2:
     c1, c2 = st.columns(2)
     with c1:
@@ -916,9 +922,6 @@ with tab2:
         margin=dict(l=5,r=5,t=10,b=5))
     st.plotly_chart(fig_fi, use_container_width=True)
 
-# ══════════════════════════════════════════════════════════
-# TAB 3: DATA ANALYSIS
-# ══════════════════════════════════════════════════════════
 with tab3:
     cols = st.columns(4)
     for col, (val, lbl, clr) in zip(cols, [
@@ -928,6 +931,7 @@ with tab3:
         with col:
             st.markdown(f"<div class='mcard {clr}'><div class='mval {clr}'>{val}</div>"
                         f"<div class='mlbl'>{lbl}</div></div>", unsafe_allow_html=True)
+
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("<div class='sec'>◈ PREPROCESSING SUMMARY</div>", unsafe_allow_html=True)
     st.dataframe(pd.DataFrame({
@@ -969,9 +973,6 @@ with tab3:
             margin=dict(l=5,r=5,t=40,b=5))
         st.plotly_chart(fig_c, use_container_width=True)
 
-# ══════════════════════════════════════════════════════════
-# TAB 4: EXPLAINABILITY
-# ══════════════════════════════════════════════════════════
 with tab4:
     st.markdown("<div class='sec'>◈ MODEL DECISION INSIGHTS</div>", unsafe_allow_html=True)
     st.markdown("""
@@ -1033,9 +1034,6 @@ with tab4:
     for item in limitations:
         st.markdown(f"<div class='icard'>⚠️ {item}</div>", unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════
-# TAB 5: ABOUT
-# ══════════════════════════════════════════════════════════
 with tab5:
     c1, c2 = st.columns(2)
     with c1:
