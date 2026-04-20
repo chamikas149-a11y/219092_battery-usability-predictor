@@ -27,7 +27,6 @@ st.markdown("""
     [data-testid="stSidebar"]{display:none;}
     .block-container{padding:1rem 2rem;}
 
-    /* Top Nav Bar */
     .topbar{background:linear-gradient(90deg,#060e1c,#0a1628,#060e1c);
             border-bottom:1px solid var(--border);
             padding:0.8rem 2rem;margin:-1rem -2rem 1.5rem -2rem;
@@ -47,7 +46,6 @@ st.markdown("""
           border:1px solid var(--border);border-top:2px solid var(--cyan);
           border-radius:12px;padding:1.5rem 2rem;margin-bottom:1.5rem;
           display:flex;align-items:center;justify-content:space-between;}
-    .hero-left{}
     .hero-title{font-family:Rajdhani,sans-serif;font-size:1.8rem;font-weight:700;
                 color:var(--cyan);letter-spacing:2px;
                 text-shadow:0 0 30px rgba(0,212,255,0.3);margin:0;}
@@ -89,6 +87,8 @@ st.markdown("""
     .psub{font-family:Share Tech Mono,monospace;font-size:0.9rem;color:var(--muted);}
     .rec-card{border-radius:10px;padding:1rem 1.2rem;margin:0.4rem 0;
               border:1px solid;font-family:'Exo 2',sans-serif;font-size:0.88rem;}
+    .warn-card{border-radius:10px;padding:0.9rem 1.1rem;margin:0.35rem 0;
+               border:1px solid;font-family:'Exo 2',sans-serif;font-size:0.86rem;}
     .input-card{background:var(--card);border:1px solid var(--border);
                 border-radius:12px;padding:1.5rem;margin-bottom:1rem;}
     .stButton>button{background:linear-gradient(135deg,#00d4ff20,#00ff9d20)!important;
@@ -128,6 +128,40 @@ FEATURES = ['Voltage','Current','Power','Temperature','CycleCount','State_encode
 CLASS_NAMES = ['Poor','Fair','Good']
 CLASS_COLORS = {'Poor':'#ff3366','Fair':'#ff6b35','Good':'#00ff9d'}
 
+TRAIN_RANGES = {
+    "Voltage": (6.0, 8.2),
+    "Current": (-10.0, 10.0),
+    "Temperature": (5.0, 60.0)
+}
+
+ERROR_ANALYSIS_DF = pd.DataFrame({
+    "Condition": [
+        "Low Voltage", "Medium Voltage", "High Voltage",
+        "Low Temp", "Medium Temp", "High Temp",
+        "Low Current", "Medium Current", "High Current"
+    ],
+    "MAE": [
+        2.042841, 0.787428, 1.057542,
+        1.430562, 0.863915, 1.625805,
+        1.055200, 0.743832, 2.133351
+    ],
+    "Group": [
+        "Voltage", "Voltage", "Voltage",
+        "Temperature", "Temperature", "Temperature",
+        "Current", "Current", "Current"
+    ]
+})
+
+ABLATION_DF = pd.DataFrame({
+    "Feature": ["Voltage", "State", "Power", "Temperature", "CycleCount", "Current"],
+    "MAE Increase": [68.976093, 0.293844, 0.183841, 0.064902, -0.121550, -0.164030]
+})
+
+PERMUTATION_DF = pd.DataFrame({
+    "Feature": ["Voltage", "Power", "Current", "State", "Temperature", "CycleCount"],
+    "MAE Increase": [15.162413, 0.126543, 0.016724, 0.014314, 0.006838, -0.053349]
+})
+
 @st.cache_resource
 def load_models():
     try:
@@ -142,11 +176,11 @@ def load_models():
         st.warning(f"⚠️ Model load error: {e}")
         return None, None, None, False
 
-def predict_one(v,i,p,t,c,s,scaler,reg,cls):
-    X   = scaler.transform([[v,i,p,t,c,s]])
-    seq = np.tile(X,(SEQUENCE_LENGTH,1)).reshape(1,SEQUENCE_LENGTH,len(FEATURES))
-    soh   = float(np.clip(reg.predict(seq,verbose=0)[0][0],0,100))
-    probs = cls.predict(seq,verbose=0)[0]
+def predict_one(v, i, p, t, c, s, scaler, reg, cls):
+    X = scaler.transform([[v, i, p, t, c, s]])
+    seq = np.tile(X, (SEQUENCE_LENGTH, 1)).reshape(1, SEQUENCE_LENGTH, len(FEATURES))
+    soh = float(np.clip(reg.predict(seq, verbose=0)[0][0], 0, 100))
+    probs = cls.predict(seq, verbose=0)[0]
     return soh, CLASS_NAMES[int(np.argmax(probs))], probs
 
 def make_gauge(soh, color):
@@ -168,50 +202,129 @@ def make_gauge(soh, color):
                 {'range':[70,100],'color':'rgba(0,255,157,0.15)'}],
             'threshold':{'line':{'color':'white','width':2},
                          'thickness':0.75,'value':soh}}))
-    fig.update_layout(**PLOT_BG,height=260,margin=dict(l=20,r=20,t=40,b=10))
+    fig.update_layout(**PLOT_BG, height=260, margin=dict(l=20,r=20,t=40,b=10))
     return fig
 
 def make_input_viz(voltage, current, temperature, soh_est):
-    # Real-time visualization of inputs
     fig = make_subplots(rows=1, cols=3,
         subplot_titles=["Voltage (V)", "Current (A)", "Temperature (°C)"])
 
-    # Voltage gauge bar
-    v_pct = (voltage - V_MIN) / (V_MAX - V_MIN) * 100
     fig.add_trace(go.Bar(
         x=['Voltage'], y=[voltage],
         marker_color='#00d4ff', opacity=0.85,
         text=f'{voltage:.2f}V', textposition='outside',
-        textfont=dict(size=14,family='Rajdhani',color='#00d4ff')),
+        textfont=dict(size=14, family='Rajdhani', color='#00d4ff')),
         row=1, col=1)
-    fig.update_yaxes(range=[5.5,8.5], row=1, col=1,
-        gridcolor='#1a3a5c',linecolor='#1a3a5c')
+    fig.update_yaxes(range=[5.5, 8.5], row=1, col=1,
+        gridcolor='#1a3a5c', linecolor='#1a3a5c')
 
-    # Current bar
     curr_color = '#00ff9d' if current >= 0 else '#ff6b35'
     fig.add_trace(go.Bar(
         x=['Current'], y=[current],
         marker_color=curr_color, opacity=0.85,
         text=f'{current:.2f}A', textposition='outside',
-        textfont=dict(size=14,family='Rajdhani',color=curr_color)),
+        textfont=dict(size=14, family='Rajdhani', color=curr_color)),
         row=1, col=2)
-    fig.update_yaxes(range=[-6,6], row=1, col=2,
-        gridcolor='#1a3a5c',linecolor='#1a3a5c')
+    fig.update_yaxes(range=[-6, 6], row=1, col=2,
+        gridcolor='#1a3a5c', linecolor='#1a3a5c')
 
-    # Temperature
-    temp_color = '#00ff9d' if temperature<=40 else '#ff6b35' if temperature<=50 else '#ff3366'
+    temp_color = '#00ff9d' if temperature <= 40 else '#ff6b35' if temperature <= 50 else '#ff3366'
     fig.add_trace(go.Bar(
         x=['Temperature'], y=[temperature],
         marker_color=temp_color, opacity=0.85,
         text=f'{temperature:.1f}°C', textposition='outside',
-        textfont=dict(size=14,family='Rajdhani',color=temp_color)),
+        textfont=dict(size=14, family='Rajdhani', color=temp_color)),
         row=1, col=3)
-    fig.update_yaxes(range=[15,70], row=1, col=3,
-        gridcolor='#1a3a5c',linecolor='#1a3a5c')
+    fig.update_yaxes(range=[15, 70], row=1, col=3,
+        gridcolor='#1a3a5c', linecolor='#1a3a5c')
 
-    fig.update_layout(**PLOT_BG, height=250,
-        showlegend=False, margin=dict(l=10,r=10,t=30,b=10))
+    fig.update_layout(**PLOT_BG, height=250, showlegend=False,
+        margin=dict(l=10, r=10, t=30, b=10))
     return fig
+
+def make_error_analysis_chart():
+    fig = go.Figure()
+    colors = []
+    for c in ERROR_ANALYSIS_DF["Condition"]:
+        if "Voltage" in c:
+            colors.append('#00d4ff')
+        elif "Temp" in c:
+            colors.append('#ff6b35')
+        else:
+            colors.append('#00ff9d')
+
+    fig.add_trace(go.Bar(
+        x=ERROR_ANALYSIS_DF["Condition"],
+        y=ERROR_ANALYSIS_DF["MAE"],
+        marker_color=colors,
+        opacity=0.88,
+        text=[f"{v:.2f}" for v in ERROR_ANALYSIS_DF["MAE"]],
+        textposition='outside',
+        textfont=dict(size=10, family='Share Tech Mono')
+    ))
+    fig.update_layout(
+        **PLOT_BG,
+        title='Prediction Error by Operating Condition',
+        height=360,
+        xaxis=dict(tickangle=-20, gridcolor='#1a3a5c', linecolor='#1a3a5c'),
+        yaxis=dict(title='MAE', gridcolor='#1a3a5c', linecolor='#1a3a5c'),
+        margin=dict(l=5, r=5, t=45, b=10),
+        showlegend=False
+    )
+    return fig
+
+def make_importance_chart(df, title, color_main):
+    colors = []
+    for feature, value in zip(df["Feature"], df["MAE Increase"]):
+        if feature == "Voltage":
+            colors.append('#ff3366')
+        elif value < 0:
+            colors.append('#7ba7cc')
+        else:
+            colors.append(color_main)
+
+    fig = go.Figure(go.Bar(
+        x=df["MAE Increase"],
+        y=df["Feature"],
+        orientation='h',
+        marker_color=colors,
+        opacity=0.88,
+        text=[f"{v:.3f}" for v in df["MAE Increase"]],
+        textposition='outside',
+        textfont=dict(size=10, family='Share Tech Mono')
+    ))
+    fig.update_layout(
+        **PLOT_BG,
+        title=title,
+        height=320,
+        xaxis=dict(title='MAE Increase', gridcolor='#1a3a5c', linecolor='#1a3a5c'),
+        yaxis=dict(gridcolor='#1a3a5c', linecolor='#1a3a5c'),
+        margin=dict(l=5, r=5, t=45, b=10),
+        showlegend=False
+    )
+    fig.add_vline(x=0, line_color='#7ba7cc', line_width=1)
+    return fig
+
+def get_input_warnings(voltage, current, temperature):
+    warnings_list = []
+
+    if voltage < 6.5:
+        warnings_list.append(("⚠️", f"Low voltage detected ({voltage:.2f}V). Prediction error can increase near discharge conditions.", "orange"))
+    elif voltage > 8.0:
+        warnings_list.append(("ℹ️", f"High voltage region ({voltage:.2f}V). Model is valid, but interpretation should consider near-full-charge behavior.", "cyan"))
+
+    if abs(current) > 3.0:
+        warnings_list.append(("⚠️", f"High current detected ({current:.2f}A). Error tends to increase under high-current operating conditions.", "orange"))
+
+    if temperature > 45:
+        warnings_list.append(("🌡️", f"Elevated temperature ({temperature:.1f}°C). Prediction reliability may reduce under thermal stress.", "red"))
+    elif temperature < 15:
+        warnings_list.append(("❄️", f"Low temperature ({temperature:.1f}°C). Battery behavior may become less stable outside normal thermal range.", "orange"))
+
+    if not warnings_list:
+        warnings_list.append(("✅", "Inputs fall within the model’s normal operating region. Prediction reliability is expected to be higher.", "green"))
+
+    return warnings_list
 
 def get_recommendations(usability, soh, voltage, temperature, current):
     power = voltage * current
@@ -253,16 +366,15 @@ def generate_report(voltage, current, power, temperature, soh,
     state = "CHARGING" if current >= 0 else "DISCHARGING"
 
     rec_html = ""
-    for icon,txt,clr in recs:
+    for icon, txt, clr in recs:
         bg = {'green':'#e8f8f0','orange':'#fff3e8','red':'#fde8ec'}[clr]
         bc = {'green':'#00aa66','orange':'#dd6600','red':'#cc0033'}[clr]
         rec_html += f'<div style="background:{bg};border-left:4px solid {bc};padding:10px 15px;margin:6px 0;border-radius:4px;font-size:13px;">{icon} {txt}</div>'
 
-    # Probability bars
     prob_html = ""
     for cls_name, prob, clr in zip(CLASS_NAMES, probs,
                                      ['#cc0033','#dd6600','#00aa66']):
-        w = int(prob*100)
+        w = int(prob * 100)
         prob_html += f'''
         <div style="margin:8px 0;">
             <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
@@ -453,16 +565,32 @@ def generate_report(voltage, current, power, temperature, soh,
     </div>
 </div>
 
+<div class="section">
+    <div class="section-title">🧠 Explainability Summary</div>
+    <div class="param-grid">
+        <div class="param-item">
+            <div class="param-label">Dominant Feature</div>
+            <div class="param-value" style="font-size:14px;">Voltage</div>
+            <div class="param-status">Strongest influence in both ablation and permutation analysis</div>
+        </div>
+        <div class="param-item">
+            <div class="param-label">Model Limitation</div>
+            <div class="param-value" style="font-size:14px;">Voltage-based SoH proxy</div>
+            <div class="param-status">Best interpreted as practical usability estimation</div>
+        </div>
+    </div>
+</div>
+
 </div>
 
 <div class="footer">
     <div class="footer-text">
         <strong style="color:#00d4ff;">🍃 LEAF BATTERY — AI-Enabled Battery Usability Prediction System</strong><br>
         Researcher: R.M.C.S.L Jayathilaka | Index No: 219092<br>
-        <span class="university">Wayamba University of Sri Lanka</span> | 
+        <span class="university">Wayamba University of Sri Lanka</span> |
         Faculty of Technology | BET (Hons) Electrotechnology<br>
         Research: LSTM-Based Prediction of Reconditioned Second-Life Li-ion Battery Modules<br>
-        <em style="color:#4a7a9b;">This report is generated by an AI prediction system. 
+        <em style="color:#4a7a9b;">This report is generated by an AI prediction system.
         Results should be verified by a qualified battery technician.</em>
     </div>
 </div>
@@ -474,7 +602,6 @@ def generate_report(voltage, current, power, temperature, soh,
 
 lstm_reg, lstm_cls, scaler, loaded = load_models()
 
-# ── TOP NAV BAR ────────────────────────────────────────────
 st.markdown(f"""
 <div class="topbar">
     <div class="topbar-logo">
@@ -493,7 +620,6 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── HERO ───────────────────────────────────────────────────
 st.markdown("""
 <div class="hero">
     <div class="hero-left">
@@ -509,27 +635,28 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── TABS ───────────────────────────────────────────────────
-tab1,tab2,tab3,tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🔮 LIVE PREDICTION",
     "📊 MODEL PERFORMANCE",
     "🔍 DATA ANALYSIS",
-    "ℹ️ ABOUT"])
+    "🧠 EXPLAINABILITY",
+    "ℹ️ ABOUT"
+])
 
 # ══════════════════════════════════════════════════════════
 # TAB 1: LIVE PREDICTION
 # ══════════════════════════════════════════════════════════
 with tab1:
-    # Metrics row
     cols = st.columns(6)
-    for col,(val,lbl,clr) in zip(cols,[
-        ("94.73%","R² SCORE","c"),("1.31%","MAE","g"),("4.02%","RMSE","o"),
-        ("97.78%","ACCURACY","c"),("97.79%","PRECISION","g"),("97.78%","F1-SCORE","o")]):
+    for col, (val, lbl, clr) in zip(cols, [
+        ("94.73%", "R² SCORE", "c"), ("1.31%", "MAE", "g"), ("4.02%", "RMSE", "o"),
+        ("97.78%", "ACCURACY", "c"), ("97.79%", "PRECISION", "g"), ("97.78%", "F1-SCORE", "o")
+    ]):
         with col:
             st.markdown(f"<div class='mcard {clr}'><div class='mval {clr}'>{val}</div>"
-                        f"<div class='mlbl'>{lbl}</div></div>",unsafe_allow_html=True)
+                        f"<div class='mlbl'>{lbl}</div></div>", unsafe_allow_html=True)
 
-    st.markdown("<br>",unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("<div class='sec'>◈ ENTER BATTERY MEASUREMENTS</div>",
                 unsafe_allow_html=True)
     st.markdown("""<div class='icard'>
@@ -537,19 +664,17 @@ with tab1:
         Power & State are <strong>auto-calculated</strong> — simple & accurate!
     </div>""", unsafe_allow_html=True)
 
-    # Number inputs (type කරන්න)
-    c1,c2,c3 = st.columns(3)
+    c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("""<div style='text-align:center;font-family:Rajdhani;
                     font-size:1.1rem;color:#00d4ff;letter-spacing:1px;
                     margin-bottom:0.5rem;'>⚡ VOLTAGE (V)</div>""",
                     unsafe_allow_html=True)
-        voltage = st.number_input("Voltage",min_value=6.0,max_value=8.2,
-                                   value=7.40,step=0.01,format="%.2f",
+        voltage = st.number_input("Voltage", min_value=6.0, max_value=8.2,
+                                   value=7.40, step=0.01, format="%.2f",
                                    label_visibility="collapsed")
-        # Visual bar
-        v_pct = (voltage-V_MIN)/(V_MAX-V_MIN)*100
-        v_color = "#00ff9d" if voltage>=7.0 else "#ff6b35" if voltage>=6.5 else "#ff3366"
+        v_pct = (voltage - V_MIN) / (V_MAX - V_MIN) * 100
+        v_color = "#00ff9d" if voltage >= 7.0 else "#ff6b35" if voltage >= 6.5 else "#ff3366"
         st.markdown(f"""
         <div style='background:#0d1f3c;border-radius:6px;height:8px;margin-top:5px;'>
             <div style='background:{v_color};width:{v_pct:.0f}%;height:8px;border-radius:6px;'></div>
@@ -563,11 +688,11 @@ with tab1:
                     font-size:1.1rem;color:#00d4ff;letter-spacing:1px;
                     margin-bottom:0.5rem;'>🔌 CURRENT (A)</div>""",
                     unsafe_allow_html=True)
-        current = st.number_input("Current",min_value=-10.0,max_value=10.0,
-                                   value=1.20,step=0.01,format="%.2f",
+        current = st.number_input("Current", min_value=-10.0, max_value=10.0,
+                                   value=1.20, step=0.01, format="%.2f",
                                    label_visibility="collapsed")
-        curr_color = "#00ff9d" if current>=0 else "#ff6b35"
-        curr_label = "🔋 DISCHARGING" if current>=0 else "⚡ DISCHARGING"
+        curr_color = "#00ff9d" if current >= 0 else "#ff6b35"
+        curr_label = "🔋 CHARGING" if current >= 0 else "⚡ DISCHARGING"
         st.markdown(f"""
         <div style='text-align:center;font-family:Share Tech Mono;font-size:0.78rem;
                     color:{curr_color};margin-top:8px;
@@ -580,11 +705,11 @@ with tab1:
                     font-size:1.1rem;color:#00d4ff;letter-spacing:1px;
                     margin-bottom:0.5rem;'>🌡️ TEMPERATURE (°C)</div>""",
                     unsafe_allow_html=True)
-        temperature = st.number_input("Temperature",min_value=0.0,max_value=80.0,
-                                       value=35.0,step=0.1,format="%.1f",
+        temperature = st.number_input("Temperature", min_value=0.0, max_value=80.0,
+                                       value=35.0, step=0.1, format="%.1f",
                                        label_visibility="collapsed")
-        temp_color = "#00ff9d" if temperature<=40 else "#ff6b35" if temperature<=50 else "#ff3366"
-        temp_status = "✅ Normal" if temperature<=40 else "⚠️ Warm" if temperature<=50 else "❌ Hot"
+        temp_color = "#00ff9d" if temperature <= 40 else "#ff6b35" if temperature <= 50 else "#ff3366"
+        temp_status = "✅ Normal" if temperature <= 40 else "⚠️ Warm" if temperature <= 50 else "❌ Hot"
         st.markdown(f"""
         <div style='text-align:center;font-family:Share Tech Mono;font-size:0.78rem;
                     color:{temp_color};margin-top:8px;
@@ -592,8 +717,7 @@ with tab1:
             {temp_status} | {temperature:.1f}°C
         </div>""", unsafe_allow_html=True)
 
-    # Auto values
-    power     = round(voltage * current, 3)
+    power = round(voltage * current, 3)
     state_enc = 1 if current >= 0 else 0
     state_str = "CHARGING" if current >= 0 else "DISCHARGING"
 
@@ -604,32 +728,42 @@ with tab1:
         <strong style='color:#7ba7cc;'>Voltage SoH ≈ {((voltage-V_MIN)/(V_MAX-V_MIN)*100):.1f}%</strong>
     </div>""", unsafe_allow_html=True)
 
-    # Input visualization
-    st.markdown("<div class='sec'>◈ INPUT VISUALIZATION</div>",unsafe_allow_html=True)
+    st.markdown("<div class='sec'>◈ INPUT VISUALIZATION</div>", unsafe_allow_html=True)
     st.plotly_chart(make_input_viz(voltage, current, temperature,
-                    (voltage-V_MIN)/(V_MAX-V_MIN)*100),
+                    (voltage - V_MIN) / (V_MAX - V_MIN) * 100),
                     use_container_width=True)
 
-    # Predict button
+    st.markdown("<div class='sec'>◈ INPUT RELIABILITY CHECK</div>", unsafe_allow_html=True)
+    input_warnings = get_input_warnings(voltage, current, temperature)
+    for icon, text, level in input_warnings:
+        bc = {"green":"#00ff9d", "orange":"#ff6b35", "red":"#ff3366", "cyan":"#00d4ff"}[level]
+        bg = {"green":"rgba(0,255,157,0.06)", "orange":"rgba(255,107,53,0.06)",
+              "red":"rgba(255,51,102,0.06)", "cyan":"rgba(0,212,255,0.06)"}[level]
+        st.markdown(f"""
+        <div class='warn-card' style='background:{bg};border-color:{bc};color:var(--text);'>
+            {icon} {text}
+        </div>""", unsafe_allow_html=True)
+
     if st.button("🔮 PREDICT BATTERY CONDITION NOW"):
         if not loaded:
             st.error("⚠️ Models not loaded! Please refresh the page.")
         else:
             with st.spinner("🧠 Running LSTM analysis..."):
-                soh,usability,probs = predict_one(
-                    voltage,current,power,temperature,
-                    1,state_enc,scaler,lstm_reg,lstm_cls)
+                soh, usability, probs = predict_one(
+                    voltage, current, power, temperature,
+                    1, state_enc, scaler, lstm_reg, lstm_cls
+                )
 
             color = CLASS_COLORS[usability]
-            css   = {'Good':'pred-g','Fair':'pred-f','Poor':'pred-p'}[usability]
+            css = {'Good':'pred-g','Fair':'pred-f','Poor':'pred-p'}[usability]
             emoji = {'Good':'✅','Fair':'⚠️','Poor':'❌'}[usability]
-            recs  = get_recommendations(usability,soh,voltage,temperature,current)
+            recs = get_recommendations(usability, soh, voltage, temperature, current)
 
-            st.markdown("<div class='sec'>◈ PREDICTION RESULTS</div>",unsafe_allow_html=True)
+            st.markdown("<div class='sec'>◈ PREDICTION RESULTS</div>", unsafe_allow_html=True)
 
-            c1,c2 = st.columns([1,1])
+            c1, c2 = st.columns([1,1])
             with c1:
-                st.plotly_chart(make_gauge(soh,color),use_container_width=True)
+                st.plotly_chart(make_gauge(soh, color), use_container_width=True)
             with c2:
                 st.markdown(f"""
                 <div class='pred-box {css}' style='margin-top:0.5rem;'>
@@ -644,36 +778,33 @@ with tab1:
                     </div>
                 </div>""", unsafe_allow_html=True)
 
-                # Prob chart
                 fig_p = go.Figure()
-                for i,(cls_n,prob) in enumerate(zip(CLASS_NAMES,probs)):
+                for i, (cls_n, prob) in enumerate(zip(CLASS_NAMES, probs)):
                     fig_p.add_trace(go.Bar(
-                        x=[prob*100],y=[cls_n],orientation='h',
-                        marker_color=['#ff3366','#ff6b35','#00ff9d'][i],opacity=0.85,
-                        text=f"{prob*100:.1f}%",textposition='inside',
-                        textfont=dict(size=13,family='Rajdhani',color='white')))
-                fig_p.update_layout(**PLOT_BG,height=170,showlegend=False,
-                    xaxis=dict(range=[0,100],gridcolor='#1a3a5c',
-                               linecolor='#1a3a5c',ticksuffix='%'),
+                        x=[prob * 100], y=[cls_n], orientation='h',
+                        marker_color=['#ff3366','#ff6b35','#00ff9d'][i], opacity=0.85,
+                        text=f"{prob*100:.1f}%", textposition='inside',
+                        textfont=dict(size=13, family='Rajdhani', color='white')))
+                fig_p.update_layout(**PLOT_BG, height=170, showlegend=False,
+                    xaxis=dict(range=[0,100], gridcolor='#1a3a5c',
+                               linecolor='#1a3a5c', ticksuffix='%'),
                     margin=dict(l=5,r=5,t=5,b=5))
-                st.plotly_chart(fig_p,use_container_width=True)
+                st.plotly_chart(fig_p, use_container_width=True)
 
-            # Recommendations
-            st.markdown("<div class='sec'>◈ RECOMMENDATIONS</div>",unsafe_allow_html=True)
+            st.markdown("<div class='sec'>◈ RECOMMENDATIONS</div>", unsafe_allow_html=True)
             bc = {'Good':'#00ff9d','Fair':'#ff6b35','Poor':'#ff3366'}[usability]
             bg = {'Good':'rgba(0,255,157,0.05)','Fair':'rgba(255,107,53,0.05)',
                   'Poor':'rgba(255,51,102,0.05)'}[usability]
-            for icon,txt,clr in recs:
+            for icon, txt, clr in recs:
                 st.markdown(f"""
                 <div class='rec-card' style='background:{bg};border-color:{bc};color:var(--text);'>
                     {icon} {txt}
                 </div>""", unsafe_allow_html=True)
 
-            # Download Report
-            st.markdown("<div class='sec'>◈ DOWNLOAD REPORT</div>",unsafe_allow_html=True)
-            report = generate_report(voltage,current,power,temperature,
-                                      soh,usability,probs,recs)
-            fname  = f"LeafBattery_Report_{usability}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+            st.markdown("<div class='sec'>◈ DOWNLOAD REPORT</div>", unsafe_allow_html=True)
+            report = generate_report(voltage, current, power, temperature,
+                                      soh, usability, probs, recs)
+            fname = f"LeafBattery_Report_{usability}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
             st.download_button(
                 label="📄 DOWNLOAD BATTERY ANALYSIS REPORT",
                 data=report, file_name=fname, mime="text/html",
@@ -688,196 +819,268 @@ with tab1:
 # TAB 2: MODEL PERFORMANCE
 # ══════════════════════════════════════════════════════════
 with tab2:
-    c1,c2 = st.columns(2)
+    c1, c2 = st.columns(2)
     with c1:
         st.markdown("**🎯 REGRESSION — SoH Prediction**")
         st.dataframe(pd.DataFrame({
             'Metric':['R² Score','MAE','RMSE','MAPE'],
             'Value':['94.73%','1.3105%','4.0165%','2.5312%'],
             'Status':['✅ Excellent','✅ Very Low','✅ Good','✅ Very Low']}),
-            use_container_width=True,hide_index=True)
+            use_container_width=True, hide_index=True)
     with c2:
         st.markdown("**🎯 CLASSIFICATION — Usability**")
         st.dataframe(pd.DataFrame({
             'Metric':['Accuracy','Precision','Recall','F1-Score'],
             'Value':['97.78%','97.79%','97.78%','97.78%'],
             'Status':['✅']*4}),
-            use_container_width=True,hide_index=True)
+            use_container_width=True, hide_index=True)
 
-    st.markdown("<div class='sec'>◈ PER-CLASS METRICS</div>",unsafe_allow_html=True)
+    st.markdown("<div class='sec'>◈ PER-CLASS METRICS</div>", unsafe_allow_html=True)
     fig2 = go.Figure()
-    for vals,name,color in [
-        ([97.94,85.71,98.87],'Precision','#00d4ff'),
-        ([94.35,86.97,99.20],'Recall','#00ff9d'),
-        ([96.11,86.34,99.03],'F1-Score','#ff6b35')]:
-        fig2.add_trace(go.Bar(name=name,x=CLASS_NAMES,y=vals,
-            marker_color=color,opacity=0.85,
-            text=[f"{v:.1f}%" for v in vals],textposition='outside',
-            textfont=dict(size=10,family='Share Tech Mono')))
-    fig2.update_layout(**PLOT_BG,barmode='group',height=300,
-        yaxis=dict(range=[0,115],gridcolor='#1a3a5c',linecolor='#1a3a5c'),
+    for vals, name, color in [
+        ([97.94,85.71,98.87], 'Precision', '#00d4ff'),
+        ([94.35,86.97,99.20], 'Recall', '#00ff9d'),
+        ([96.11,86.34,99.03], 'F1-Score', '#ff6b35')
+    ]:
+        fig2.add_trace(go.Bar(name=name, x=CLASS_NAMES, y=vals,
+            marker_color=color, opacity=0.85,
+            text=[f"{v:.1f}%" for v in vals], textposition='outside',
+            textfont=dict(size=10, family='Share Tech Mono')))
+    fig2.update_layout(**PLOT_BG, barmode='group', height=300,
+        yaxis=dict(range=[0,115], gridcolor='#1a3a5c', linecolor='#1a3a5c'),
         margin=dict(l=5,r=5,t=10,b=5))
-    fig2.add_hline(y=90,line_dash='dash',line_color='#ff3366')
-    st.plotly_chart(fig2,use_container_width=True)
+    fig2.add_hline(y=90, line_dash='dash', line_color='#ff3366')
+    st.plotly_chart(fig2, use_container_width=True)
 
-    st.markdown("<div class='sec'>◈ CROSS-VALIDATION (5-FOLD)</div>",unsafe_allow_html=True)
+    st.markdown("<div class='sec'>◈ CROSS-VALIDATION (5-FOLD)</div>", unsafe_allow_html=True)
     st.dataframe(pd.DataFrame({
         'Fold':['Fold 1','Fold 2','Fold 3','Fold 4','Fold 5','MEAN ± STD'],
         'R²':['92.40%','97.34%','93.81%','80.66%','95.71%','91.98% ± 5.91%'],
         'MAE':['0.6089%','1.0304%','0.7898%','1.5795%','2.5410%','1.3099% ± 0.6969%'],
         'Accuracy':['100%','94.66%','100%','97.90%','96.31%','97.77% ± 2.08%']}),
-        use_container_width=True,hide_index=True)
+        use_container_width=True, hide_index=True)
 
-    st.markdown("<div class='sec'>◈ CONFUSION MATRIX</div>",unsafe_allow_html=True)
-    c1,c2 = st.columns(2)
+    st.markdown("<div class='sec'>◈ CONFUSION MATRIX</div>", unsafe_allow_html=True)
+    c1, c2 = st.columns(2)
     cm = np.array([[1520,79,12],[19,1008,132],[13,89,12591]])
     with c1:
-        fig_cm = go.Figure(go.Heatmap(z=cm,x=CLASS_NAMES,y=CLASS_NAMES,
-            colorscale='Blues',text=cm,texttemplate='%{text}',
-            textfont=dict(size=13,family='Rajdhani')))
-        fig_cm.update_layout(**PLOT_BG,title='Counts',height=300,
-            xaxis_title='Predicted',yaxis_title='Actual',
+        fig_cm = go.Figure(go.Heatmap(z=cm, x=CLASS_NAMES, y=CLASS_NAMES,
+            colorscale='Blues', text=cm, texttemplate='%{text}',
+            textfont=dict(size=13, family='Rajdhani')))
+        fig_cm.update_layout(**PLOT_BG, title='Counts', height=300,
+            xaxis_title='Predicted', yaxis_title='Actual',
             margin=dict(l=5,r=5,t=40,b=5))
-        st.plotly_chart(fig_cm,use_container_width=True)
+        st.plotly_chart(fig_cm, use_container_width=True)
     with c2:
-        cm_n = cm.astype(float)/cm.sum(axis=1)[:,np.newaxis]*100
-        fig_cn = go.Figure(go.Heatmap(z=cm_n,x=CLASS_NAMES,y=CLASS_NAMES,
-            colorscale='Greens',text=np.round(cm_n,1),
-            texttemplate='%{text}%',textfont=dict(size=13,family='Rajdhani'),
-            zmin=0,zmax=100))
-        fig_cn.update_layout(**PLOT_BG,title='Normalized %',height=300,
-            xaxis_title='Predicted',yaxis_title='Actual',
+        cm_n = cm.astype(float) / cm.sum(axis=1)[:, np.newaxis] * 100
+        fig_cn = go.Figure(go.Heatmap(z=cm_n, x=CLASS_NAMES, y=CLASS_NAMES,
+            colorscale='Greens', text=np.round(cm_n,1),
+            texttemplate='%{text}%', textfont=dict(size=13, family='Rajdhani'),
+            zmin=0, zmax=100))
+        fig_cn.update_layout(**PLOT_BG, title='Normalized %', height=300,
+            xaxis_title='Predicted', yaxis_title='Actual',
             margin=dict(l=5,r=5,t=40,b=5))
-        st.plotly_chart(fig_cn,use_container_width=True)
+        st.plotly_chart(fig_cn, use_container_width=True)
 
-    st.markdown("<div class='sec'>◈ OVERFITTING ANALYSIS</div>",unsafe_allow_html=True)
-    c1,c2 = st.columns(2)
+    st.markdown("<div class='sec'>◈ OVERFITTING ANALYSIS</div>", unsafe_allow_html=True)
+    c1, c2 = st.columns(2)
     with c1:
-        fig_o = go.Figure(go.Bar(x=['Train R²','Test R²'],y=[90.56,94.73],
+        fig_o = go.Figure(go.Bar(x=['Train R²','Test R²'], y=[90.56,94.73],
             marker_color=['#3498db','#00ff9d'],
-            text=['90.56%','94.73%'],textposition='outside',
-            textfont=dict(size=12,family='Rajdhani')))
-        fig_o.add_hline(y=90,line_dash='dash',line_color='#ff3366')
-        fig_o.update_layout(**PLOT_BG,title='R² — No Overfitting ✅',height=270,
-            yaxis=dict(range=[0,110],gridcolor='#1a3a5c',linecolor='#1a3a5c'),
+            text=['90.56%','94.73%'], textposition='outside',
+            textfont=dict(size=12, family='Rajdhani')))
+        fig_o.add_hline(y=90, line_dash='dash', line_color='#ff3366')
+        fig_o.update_layout(**PLOT_BG, title='R² — No Overfitting ✅', height=270,
+            yaxis=dict(range=[0,110], gridcolor='#1a3a5c', linecolor='#1a3a5c'),
             margin=dict(l=5,r=5,t=40,b=5))
-        st.plotly_chart(fig_o,use_container_width=True)
+        st.plotly_chart(fig_o, use_container_width=True)
     with c2:
-        fig_o2 = go.Figure(go.Bar(x=['Train Acc','Test Acc'],y=[98.08,97.78],
+        fig_o2 = go.Figure(go.Bar(x=['Train Acc','Test Acc'], y=[98.08,97.78],
             marker_color=['#3498db','#00ff9d'],
-            text=['98.08%','97.78%'],textposition='outside',
-            textfont=dict(size=12,family='Rajdhani')))
-        fig_o2.add_hline(y=90,line_dash='dash',line_color='#ff3366')
-        fig_o2.update_layout(**PLOT_BG,title='Accuracy — Gap=0.30% ✅',height=270,
-            yaxis=dict(range=[0,110],gridcolor='#1a3a5c',linecolor='#1a3a5c'),
+            text=['98.08%','97.78%'], textposition='outside',
+            textfont=dict(size=12, family='Rajdhani')))
+        fig_o2.add_hline(y=90, line_dash='dash', line_color='#ff3366')
+        fig_o2.update_layout(**PLOT_BG, title='Accuracy — Gap=0.30% ✅', height=270,
+            yaxis=dict(range=[0,110], gridcolor='#1a3a5c', linecolor='#1a3a5c'),
             margin=dict(l=5,r=5,t=40,b=5))
-        st.plotly_chart(fig_o2,use_container_width=True)
+        st.plotly_chart(fig_o2, use_container_width=True)
 
-    st.markdown("<div class='sec'>◈ FEATURE IMPORTANCE</div>",unsafe_allow_html=True)
+    st.markdown("<div class='sec'>◈ FEATURE IMPORTANCE</div>", unsafe_allow_html=True)
     fi_v = [10.8637,0.1162,0.0118,-0.0074,-0.0158,-0.0448]
     fi_f = ['Voltage','Power','Temperature','CycleCount','State','Current']
-    fig_fi = go.Figure(go.Bar(x=fi_v,y=fi_f,orientation='h',
-        marker_color=['#ff3366' if v==max(fi_v) else '#00d4ff' for v in fi_v],
-        opacity=0.85,text=[f'{v:.4f}' for v in fi_v],textposition='outside',
-        textfont=dict(family='Share Tech Mono',size=10)))
-    fig_fi.update_layout(**PLOT_BG,height=280,xaxis_title='Importance',
+    fig_fi = go.Figure(go.Bar(x=fi_v, y=fi_f, orientation='h',
+        marker_color=['#ff3366' if v == max(fi_v) else '#00d4ff' for v in fi_v],
+        opacity=0.85, text=[f'{v:.4f}' for v in fi_v], textposition='outside',
+        textfont=dict(family='Share Tech Mono', size=10)))
+    fig_fi.update_layout(**PLOT_BG, height=280, xaxis_title='Importance',
         margin=dict(l=5,r=5,t=10,b=5))
-    st.plotly_chart(fig_fi,use_container_width=True)
+    st.plotly_chart(fig_fi, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════
 # TAB 3: DATA ANALYSIS
 # ══════════════════════════════════════════════════════════
 with tab3:
     cols = st.columns(4)
-    for col,(val,lbl,clr) in zip(cols,[
-        ("77,341","TOTAL SAMPLES","c"),("11","CYCLES","g"),
-        ("6","FEATURES","o"),("3","CLASSES","r")]):
+    for col, (val, lbl, clr) in zip(cols, [
+        ("77,341","TOTAL SAMPLES","c"), ("11","CYCLES","g"),
+        ("6","FEATURES","o"), ("3","CLASSES","r")
+    ]):
         with col:
             st.markdown(f"<div class='mcard {clr}'><div class='mval {clr}'>{val}</div>"
-                        f"<div class='mlbl'>{lbl}</div></div>",unsafe_allow_html=True)
-    st.markdown("<br>",unsafe_allow_html=True)
-    st.markdown("<div class='sec'>◈ PREPROCESSING SUMMARY</div>",unsafe_allow_html=True)
+                        f"<div class='mlbl'>{lbl}</div></div>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<div class='sec'>◈ PREPROCESSING SUMMARY</div>", unsafe_allow_html=True)
     st.dataframe(pd.DataFrame({
         'Step':['Raw Data','Remove Noise','Non-Solar Filter','Voltage Filter','Final'],
         'Rows':[79863,79383,78688,77341,77341],
         'Removed':['—','480','695','1347','—'],
         'Status':['📥 Loaded','🧹 Cleaned','🔍 Filtered','⚡ Applied','✅ Ready']}),
-        use_container_width=True,hide_index=True)
-    c1,c2 = st.columns(2)
+        use_container_width=True, hide_index=True)
+
+    c1, c2 = st.columns(2)
     with c1:
-        st.markdown("<div class='sec'>◈ VOLTAGE DISTRIBUTION</div>",unsafe_allow_html=True)
+        st.markdown("<div class='sec'>◈ VOLTAGE DISTRIBUTION</div>", unsafe_allow_html=True)
         np.random.seed(42)
         v_sim = np.clip(np.concatenate([
             np.random.normal(7.8,0.15,46760),
             np.random.normal(7.2,0.2,17660),
-            np.random.normal(6.4,0.2,12921)]),6.0,8.2)
-        fig_v = go.Figure(go.Histogram(x=v_sim,nbinsx=60,
-            marker_color='#00d4ff',opacity=0.75,
-            marker_line=dict(color='#050d1a',width=0.5)))
-        fig_v.add_vline(x=v_sim.mean(),line_dash='dash',line_color='#ff6b35',
+            np.random.normal(6.4,0.2,12921)]), 6.0, 8.2)
+        fig_v = go.Figure(go.Histogram(x=v_sim, nbinsx=60,
+            marker_color='#00d4ff', opacity=0.75,
+            marker_line=dict(color='#050d1a', width=0.5)))
+        fig_v.add_vline(x=v_sim.mean(), line_dash='dash', line_color='#ff6b35',
             annotation_text=f'Mean:{v_sim.mean():.2f}V')
-        fig_v.update_layout(**PLOT_BG,title='Voltage Distribution',
-            height=270,xaxis_title='Voltage (V)',yaxis_title='Count',
+        fig_v.update_layout(**PLOT_BG, title='Voltage Distribution',
+            height=270, xaxis_title='Voltage (V)', yaxis_title='Count',
             margin=dict(l=5,r=5,t=40,b=5))
-        st.plotly_chart(fig_v,use_container_width=True)
+        st.plotly_chart(fig_v, use_container_width=True)
+
     with c2:
-        st.markdown("<div class='sec'>◈ FEATURE CORRELATION</div>",unsafe_allow_html=True)
+        st.markdown("<div class='sec'>◈ FEATURE CORRELATION</div>", unsafe_allow_html=True)
         corr_v = [1.000,0.164,0.123,-0.454,-0.462,-0.490]
         corr_f = ['Voltage','CycleCount','Temperature','Power','State','Current']
-        fig_c = go.Figure(go.Bar(x=corr_v,y=corr_f,orientation='h',
-            marker_color=['#00ff9d' if v>0 else '#ff3366' for v in corr_v],
-            opacity=0.85,text=[f'{v:.3f}' for v in corr_v],textposition='outside',
-            textfont=dict(family='Share Tech Mono',size=10)))
-        fig_c.add_vline(x=0,line_color='#7ba7cc',line_width=1)
-        fig_c.update_layout(**PLOT_BG,title='Correlation with SoH',
-            height=270,xaxis=dict(range=[-0.6,1.2],gridcolor='#1a3a5c',linecolor='#1a3a5c'),
+        fig_c = go.Figure(go.Bar(x=corr_v, y=corr_f, orientation='h',
+            marker_color=['#00ff9d' if v > 0 else '#ff3366' for v in corr_v],
+            opacity=0.85, text=[f'{v:.3f}' for v in corr_v], textposition='outside',
+            textfont=dict(family='Share Tech Mono', size=10)))
+        fig_c.add_vline(x=0, line_color='#7ba7cc', line_width=1)
+        fig_c.update_layout(**PLOT_BG, title='Correlation with SoH',
+            height=270, xaxis=dict(range=[-0.6,1.2], gridcolor='#1a3a5c', linecolor='#1a3a5c'),
             margin=dict(l=5,r=5,t=40,b=5))
-        st.plotly_chart(fig_c,use_container_width=True)
+        st.plotly_chart(fig_c, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════
-# TAB 4: ABOUT
+# TAB 4: EXPLAINABILITY
 # ══════════════════════════════════════════════════════════
 with tab4:
-    c1,c2 = st.columns(2)
+    st.markdown("<div class='sec'>◈ MODEL DECISION INSIGHTS</div>", unsafe_allow_html=True)
+    st.markdown("""
+    <div class='icard'>
+        🧠 The model performs best under <strong>normal operating conditions</strong> and becomes less stable
+        under <strong>low voltage, high temperature, and high current</strong> conditions.
+    </div>
+    <div class='icard'>
+        ⚡ Both <strong>ablation analysis</strong> and <strong>permutation importance</strong> confirm that
+        <strong>Voltage</strong> is the dominant feature driving predictions.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<div class='sec'>◈ ERROR ANALYSIS BY OPERATING CONDITION</div>", unsafe_allow_html=True)
+    st.plotly_chart(make_error_analysis_chart(), use_container_width=True)
+
+    c1, c2 = st.columns(2)
     with c1:
-        st.markdown("<div class='sec'>◈ RESEARCHER</div>",unsafe_allow_html=True)
-        for icon,lbl,val in [
+        st.markdown("<div class='sec'>◈ ABLATION STUDY</div>", unsafe_allow_html=True)
+        st.plotly_chart(make_importance_chart(ABLATION_DF, "Ablation Study — MAE Increase", "#00d4ff"), use_container_width=True)
+    with c2:
+        st.markdown("<div class='sec'>◈ PERMUTATION IMPORTANCE</div>", unsafe_allow_html=True)
+        st.plotly_chart(make_importance_chart(PERMUTATION_DF, "Permutation Importance — MAE Increase", "#00ff9d"), use_container_width=True)
+
+    st.markdown("<div class='sec'>◈ KEY FINDINGS</div>", unsafe_allow_html=True)
+    k1, k2, k3 = st.columns(3)
+    with k1:
+        st.markdown("""
+        <div class='mcard r'>
+            <div class='mval r'>Voltage</div>
+            <div class='mlbl'>DOMINANT FEATURE</div>
+        </div>
+        <div class='icard'>Removing voltage caused the largest performance degradation.</div>
+        """, unsafe_allow_html=True)
+    with k2:
+        st.markdown("""
+        <div class='mcard o'>
+            <div class='mval o'>Stress</div>
+            <div class='mlbl'>HIGHER ERROR</div>
+        </div>
+        <div class='icard'>Prediction error increases in low-voltage, high-temperature, and high-current regions.</div>
+        """, unsafe_allow_html=True)
+    with k3:
+        st.markdown("""
+        <div class='mcard c'>
+            <div class='mval c'>CycleCount</div>
+            <div class='mlbl'>WEAK FEATURE</div>
+        </div>
+        <div class='icard'>Cycle count showed weak or noisy contribution compared with voltage-driven behavior.</div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<div class='sec'>◈ MODEL LIMITATIONS</div>", unsafe_allow_html=True)
+    limitations = [
+        "SoH is estimated using a voltage-based proxy method rather than direct laboratory capacity testing.",
+        "The model was trained on a limited number of battery modules and may not fully generalize to all battery chemistries.",
+        "Prediction reliability is highest within the normal operating region and may reduce under extreme thermal or electrical stress.",
+        "The system is intended as a practical usability estimation tool, not a replacement for full battery diagnostic testing."
+    ]
+    for item in limitations:
+        st.markdown(f"<div class='icard'>⚠️ {item}</div>", unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════
+# TAB 5: ABOUT
+# ══════════════════════════════════════════════════════════
+with tab5:
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("<div class='sec'>◈ RESEARCHER</div>", unsafe_allow_html=True)
+        for icon, lbl, val in [
             ("👤","Name","R.M.C.S.L Jayathilaka"),
             ("🔢","Index No","219092"),
             ("🎓","Degree","BET (Hons) Electrotechnology"),
             ("🏫","University","Wayamba University of Sri Lanka"),
             ("🏛️","Faculty","Faculty of Technology"),
-            ("📅","Year","Final Year Research Project — 2025/2026")]:
+            ("📅","Year","Final Year Research Project — 2025/2026")
+        ]:
             st.markdown(f"<div class='icard'>{icon} <strong style='color:#7ba7cc;'>{lbl}:</strong> "
-                        f"<strong style='color:#00d4ff;'>{val}</strong></div>",unsafe_allow_html=True)
+                        f"<strong style='color:#00d4ff;'>{val}</strong></div>", unsafe_allow_html=True)
     with c2:
-        st.markdown("<div class='sec'>◈ RESEARCH OBJECTIVES</div>",unsafe_allow_html=True)
-        for i,obj in enumerate([
+        st.markdown("<div class='sec'>◈ RESEARCH OBJECTIVES</div>", unsafe_allow_html=True)
+        for i, obj in enumerate([
             "Analyze performance data of reconditioned second-life lithium-ion battery modules for solar energy storage",
             "Develop an LSTM-based dual-output prediction model to forecast usability and State of Health (SoH)",
             "Determine accuracy and reliability of the developed prediction model through rigorous validation"
-        ],1):
+        ], 1):
             st.markdown(f"<div class='icard'><strong style='color:#00d4ff;'>{i}.</strong> {obj}</div>",
                 unsafe_allow_html=True)
 
-        st.markdown("<div class='sec'>◈ RESEARCH SUMMARY</div>",unsafe_allow_html=True)
-        for icon,lbl,txt in [
+        st.markdown("<div class='sec'>◈ RESEARCH SUMMARY</div>", unsafe_allow_html=True)
+        for icon, lbl, txt in [
             ("🎯","Topic","LSTM-Based Prediction of Reconditioned Second-Life Li-ion Batteries"),
             ("📡","Data","Real-time ESP32 sensor data — 77,341 readings, 11 cycles"),
             ("🧠","Model","Dual-output LSTM (128→64→32) — Regression + Classification"),
             ("✅","Validation","5-fold temporal CV | No overfitting confirmed"),
-            ("🌞","Application","Solar energy storage battery usability assessment")]:
+            ("🌞","Application","Solar energy storage battery usability assessment")
+        ]:
             st.markdown(f"<div class='icard'>{icon} <strong style='color:#7ba7cc;'>{lbl}:</strong> {txt}</div>",
                 unsafe_allow_html=True)
 
-    st.markdown("<div class='sec'>◈ TECH STACK</div>",unsafe_allow_html=True)
-    techs=[("🐍","Python 3.14","Core Language"),("🧠","Keras 3.14","Deep Learning"),
-           ("📊","Scikit-learn","ML Utilities"),("🐼","Pandas / NumPy","Data Processing"),
-           ("📈","Plotly","Visualization"),("🌐","Streamlit","Web Dashboard"),
-           ("☁️","Google Colab","Model Training"),("📡","ESP32","Data Collection")]
+    st.markdown("<div class='sec'>◈ TECH STACK</div>", unsafe_allow_html=True)
+    techs = [
+        ("🐍","Python 3.14","Core Language"), ("🧠","Keras 3.14","Deep Learning"),
+        ("📊","Scikit-learn","ML Utilities"), ("🐼","Pandas / NumPy","Data Processing"),
+        ("📈","Plotly","Visualization"), ("🌐","Streamlit","Web Dashboard"),
+        ("☁️","Google Colab","Model Training"), ("📡","ESP32","Data Collection")
+    ]
     tcols = st.columns(4)
-    for i,(icon,name,desc) in enumerate(techs):
-        with tcols[i%4]:
+    for i, (icon, name, desc) in enumerate(techs):
+        with tcols[i % 4]:
             st.markdown(f"""<div class='mcard c' style='text-align:left;
                     padding:0.8rem;margin-bottom:0.6rem;'>
                 <div style='font-size:1.3rem;'>{icon}</div>
@@ -885,10 +1088,9 @@ with tab4:
                             font-weight:600;font-size:0.85rem;'>{name}</div>
                 <div style='color:#7ba7cc;font-family:Share Tech Mono,monospace;
                             font-size:0.68rem;'>{desc}</div>
-            </div>""",unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
 
-    # University info
-    st.markdown("<div class='sec'>◈ INSTITUTION</div>",unsafe_allow_html=True)
+    st.markdown("<div class='sec'>◈ INSTITUTION</div>", unsafe_allow_html=True)
     st.markdown("""
     <div style='background:linear-gradient(135deg,#0a1628,#0d1f3c);
                 border:1px solid #1a3a5c;border-left:4px solid #00d4ff;
@@ -903,7 +1105,7 @@ with tab4:
         </div>
         <div style='font-family:Exo 2,sans-serif;font-size:0.9rem;
                     color:#e8f4fd;margin-top:0.8rem;line-height:1.6;'>
-            Final Year Research Project — BET (Hons) Electroechnology<br>
+            Final Year Research Project — BET (Hons) Electrotechnology<br>
             Research Area: AI-Enabled Predictive Analytics for Sustainable Energy Storage<br>
             <span style='color:#00ff9d;'>Index No: 219092 | R.M.C.S.L Jayathilaka</span>
         </div>
